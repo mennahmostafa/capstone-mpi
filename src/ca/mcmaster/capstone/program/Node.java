@@ -1,0 +1,46 @@
+package ca.mcmaster.capstone.program;
+import java.io.IOException;
+
+import mpi.*;
+import ca.mcmaster.capstone.monitoralgorithm.*;
+public class Node {
+
+	public enum NodeType{monitor,program};
+	public static int rank,size;
+	public static NodeType type;
+	/**
+	 * @param args
+	 * @throws MPIException 
+	 * @throws IOException 
+	 * @throws ClassNotFoundException 
+	 */
+	public static void main(String[] args) throws MPIException, ClassNotFoundException, IOException {
+		// TODO Auto-generated method stub
+		// 1- initialise mpi 
+		initializeMPI(args);
+		// 2- initialise node (monitor or program)
+		if(rank<(size/2.0)){ //program node
+		
+			type=NodeType.program;
+			ProgramNode program=new ProgramNode(rank, size);
+			program.start();
+		}
+		else{ //monitor node
+
+			type=NodeType.monitor;
+			Monitor monitor= new Monitor(rank,size); //pass rank,size params, mpi already static
+			monitor.monitorLoop();
+		}
+			
+		// 3- start producing events and waiting to receive messages from other nodes
+		MPI.Finalize();
+	}
+	
+	public static void initializeMPI(String[] args) throws MPIException {
+		MPI.Init(args);
+
+		rank = MPI.COMM_WORLD.getRank();
+		size = MPI.COMM_WORLD.getSize();
+	}
+
+}
