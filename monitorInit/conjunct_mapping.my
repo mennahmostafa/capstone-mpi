@@ -1,0 +1,9 @@
+#conjunct_name,owner_process,expression
+A,1,x1 == 0.0
+!A,1,x1 != 0.0
+B,2,x2 == 0.0
+!B,2,x2 != 0.0
+C,3,x3 == 1.0
+!C,3,x3 != 1.0
+D,4,x4 == 1.0
+!D,4,x4 != 1.0

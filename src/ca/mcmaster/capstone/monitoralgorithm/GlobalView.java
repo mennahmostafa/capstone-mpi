@@ -18,9 +18,11 @@ import lombok.ToString;
 /* Class to represent the local view of the global state.*/
 @ToString
 public class GlobalView {
+    // FIXME: Storing these like this is needlessly error prone. Should probably be a set.
     private final Map<Integer, ProcessState> states = new HashMap<>();
     @NonNull private VectorClock cut;
     @NonNull private AutomatonState currentState;
+    //TODO: Maybe tokens, and pendingTransitions could be refactored into a Map<AutomatonTransitoin, Set<Token>>
     private final Set<Token> tokens = new HashSet<>();
     private final Queue<Event> pendingEvents = new ArrayDeque<>();
     private final Set<AutomatonTransition> pendingTransitions = new HashSet<>();
@@ -29,6 +31,9 @@ public class GlobalView {
 
     public GlobalView(@NonNull final GlobalView gv) {
         this.states.putAll(gv.states);
+        for (Map.Entry<Integer, ProcessState> entry : gv.states.entrySet()) {
+            this.states.put(entry.getKey(), new ProcessState(entry.getValue()));
+        }
         this.cut = new VectorClock(gv.cut);
         this.currentState = new AutomatonState(gv.currentState);
         this.pendingEvents.addAll(gv.pendingEvents);
@@ -175,6 +180,72 @@ public class GlobalView {
             }
         }
         return ret;
+    }
+
+    /*
+     * This method combines the state of all tokens passed in and updates the global view. The tokens
+     * must all be returned before this method will update the state in this global view.
+     *
+     * @throws IllegalArgumentException
+     */
+    public void reduceStateFromTokens(final List<Token> tokens) throws IllegalArgumentException {
+        VectorClock updatedCut = new VectorClock(this.cut);
+        final Map<Integer, ProcessState> updatedStates = new HashMap<>(this.states);
+        for (Token token : tokens) {
+            if (!token.isReturned()) {
+                throw new IllegalArgumentException("All tokens must be returned before the state can be reduced from them.");
+            }
+            updatedCut = updatedCut.merge(token.getCut());
+            @NonNull final ProcessState targetState = token.getTargetProcessState();
+            updatedStates.put(targetState.getId(), targetState);
+        }
+        this.cut = updatedCut;
+        this.states.putAll(updatedStates);
+    }
+
+    /*
+     * Checks if the VectorClock of each ProcessState in gv is consistent with that of all other processes
+     * which are taking part in the transitoin. If there is a more up to date VectorClock for that
+     * process in on of the returned tokens, use that for the comparisson.
+     *
+     * @param gv     The GlobalView to check for consistency.
+     * @param trans  The AutomatonTransition which the considered processes must take part in.
+     * @return   true if all vector clock comparisons return EQUAL or CONCURRENT
+     */
+    public boolean consistent(@NonNull final AutomatonTransition trans) {
+        Set<Integer> participatingProcesses = trans.getParticipatingProcesses();
+        Set<ProcessState> statesToCheck = new HashSet<>();
+
+        // Filter the states for the ones needed for this transition and use the state from any tokens
+        // that have returned from the processes in question instead of the old state.
+        for (ProcessState state : this.states.values()) {
+            if (participatingProcesses.contains(state.getId())) {
+                boolean useTokenState = false;
+                for (Token token : this.tokens) {
+                    if (token.isReturned() && new Integer(token.getDestination()).equals(state.getId())) {
+                        useTokenState = true;
+                        statesToCheck.add(token.getTargetProcessState());
+                    }
+                }
+                if (!useTokenState) {
+                    statesToCheck.add(state);
+                }
+            }
+        }
+
+        // Compare the vector clock of each state
+        for (ProcessState state1 : statesToCheck) {
+            for (ProcessState state2 : statesToCheck) {
+                if (!state1.equals(state2)) {
+                    VectorClock.Comparison comp = state1.getVC().compareToClock(state2.getVC());
+                    if (comp != VectorClock.Comparison.CONCURRENT
+                            && comp != VectorClock.Comparison.EQUAL) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
     }
 
     /*

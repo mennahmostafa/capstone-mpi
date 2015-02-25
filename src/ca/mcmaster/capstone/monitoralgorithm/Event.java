@@ -5,8 +5,13 @@ import lombok.ToString;
 import lombok.Value;
 
 @Value
-public final class Event {
-    public static enum EventType {SEND, RECEIVE, INTERNAL}
+public final class Event implements java.io.Serializable{
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+
+	public static enum EventType {SEND, RECEIVE, INTERNAL}
 
     int eid;
     int pid;

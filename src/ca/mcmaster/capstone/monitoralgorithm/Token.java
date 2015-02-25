@@ -14,8 +14,13 @@ import lombok.ToString;
 
 /* Class to represent the computation slicing tokens.*/
 @EqualsAndHashCode
-public class Token {
-    public static class Builder {
+public class Token  implements java.io.Serializable{
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+
+	public static class Builder {
         private final int uniqueLocalIdentifier;
         private final int owner;
         private final int  destination;

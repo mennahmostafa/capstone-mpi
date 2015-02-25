@@ -1,6 +1,6 @@
 package ca.mcmaster.capstone.monitoralgorithm;
 
-import android.util.Log;
+//import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -9,10 +9,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
+import ca.mcmaster.capstone.logger.*;
 import ca.mcmaster.capstone.initializer.AutomatonFile;
-import ca.mcmaster.capstone.initializer.ConjunctFromFile;
-import ca.mcmaster.capstone.networking.structures.NetworkPeerIdentifier;
+import ca.mcmaster.capstone.initializer.ConjunctFromFile; 
 import lombok.EqualsAndHashCode;
 import lombok.NonNull;
 import lombok.ToString;
@@ -34,7 +33,7 @@ public class Automaton {
     private Automaton() {};
 
     public void processAutomatonFile(final AutomatonFile automatonFile, final List<ConjunctFromFile> conjunctMap,
-                                            final Map<String, NetworkPeerIdentifier> virtualIdentifierMap) {
+                                            final Map<String, Integer> virtualIdentifierMap) {
         final Set<AutomatonFile.Name> names = automatonFile.getStateNames();
         final Set<AutomatonFile.Transition> transitions = automatonFile.getTransitions();
 
@@ -59,7 +58,7 @@ public class Automaton {
             final AutomatonState source = states.get(transition.getSource());
             final AutomatonState destination = states.get(transition.getDestination());
             final String[] conjuncts = transition.getPredicate().split("&");
-            final List<ConjunctFromFile> conjunctsForTransition = new ArrayList<>();
+            final List<ConjunctFromFile> conjunctsForTransition = new ArrayList<ConjunctFromFile>();
             for (final ConjunctFromFile conj : conjunctMap) {
                 if (Arrays.asList(conjuncts).contains(conj.getName())) {
                     conjunctsForTransition.add(conj);
@@ -68,13 +67,14 @@ public class Automaton {
 
             final List<Conjunct> conjunctsWithExpresssions = new ArrayList<>();
             for (final ConjunctFromFile conjunct : conjunctsForTransition) {
+            	 
                 conjunctsWithExpresssions.add(new Conjunct(virtualIdentifierMap.get("x" + conjunct.getOwnerProcess()), conjunct.getExpression()));
             }
 
             INSTANCE.transitions.add(new AutomatonTransition(source, destination, conjunctsWithExpresssions));
         }
-        Log.d(LOG_TAG, "states: " + INSTANCE.states.toString());
-        Log.d(LOG_TAG, "transitions: " + INSTANCE.transitions.toString());
+       // Log.d(LOG_TAG, "states: " + INSTANCE.states.toString());
+       // Log.d(LOG_TAG, "transitions: " + INSTANCE.transitions.toString());
     }
 
     /*
@@ -95,8 +95,15 @@ public class Automaton {
     public AutomatonState advance(@NonNull final GlobalView gv) {
         for (final AutomatonTransition transition : transitions) {
             if (transition.getFrom().equals(gv.getCurrentState()) && !transition.getFrom().equals(transition.getTo())) {
-                if (transition.evaluate(gv.getStates().values()) == Conjunct.Evaluation.TRUE) {
-                    Log.d(LOG_TAG, "Advanced to state: " + transition.getTo().getStateName());
+                boolean evaluation = false;
+                try {
+                	//Log.d("testing",transition.toString());
+                    evaluation = transition.evaluate(gv.getStates().values()) == Conjunct.Evaluation.TRUE;
+                } catch (AutomatonTransition.EvaluationException e) {
+                    Log.d(LOG_TAG, e.getLocalizedMessage());
+                }
+                if (evaluation) {
+                    Log.d(LOG_TAG, "Advanced along transition: " + transition.toString());
                     return transition.getTo();
                 }
             }

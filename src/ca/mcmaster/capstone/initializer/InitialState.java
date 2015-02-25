@@ -12,7 +12,7 @@ public class InitialState {
 
     @Value
     public static class ValuationDummy {
-        List<Variable> variables = new ArrayList();
+        List<Variable> variables = new ArrayList<>();
     }
 
     @Value

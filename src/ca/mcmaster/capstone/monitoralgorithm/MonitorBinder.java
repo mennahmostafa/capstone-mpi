@@ -1,8 +1,8 @@
 package ca.mcmaster.capstone.monitoralgorithm;
 
-import android.os.Binder;
+//import android.os.Binder;
 
-public class MonitorBinder extends Binder {
+public class MonitorBinder{ //extends Binder {
     private final Monitor monitor;
 
     public MonitorBinder(final Monitor monitor) {

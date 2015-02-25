@@ -11,7 +11,7 @@ import lombok.Value;
 @Value
 public class AutomatonFile {
     @SerializedName("state_names") Set<Name> stateNames = new HashSet<>();
-    Set<Transition> transitions = new HashSet<>();
+    Set<Transition> transitions = new HashSet<Transition>();
 
     @Value
     public static class Name {

@@ -15,20 +15,22 @@ public class Node {
 	 * @throws ClassNotFoundException 
 	 */
 	public static void main(String[] args) throws MPIException, ClassNotFoundException, IOException {
-		// TODO Auto-generated method stub
+	 
 		// 1- initialise mpi 
 		initializeMPI(args);
 		// 2- initialise node (monitor or program)
 		if(rank<(size/2.0)){ //program node
 		
+			
 			type=NodeType.program;
-			ProgramNode program=new ProgramNode(rank, size);
+			ProgramNode program=new ProgramNode(rank, size/2);
 			program.start();
 		}
 		else{ //monitor node
 
 			type=NodeType.monitor;
-			Monitor monitor= new Monitor(rank,size); //pass rank,size params, mpi already static
+			Monitor monitor= new Monitor(rank-(size/2),size/2); //pass rank,size params, mpi already static
+			 
 			monitor.monitorLoop();
 		}
 			

@@ -10,13 +10,20 @@ import lombok.ToString;
 
 /* Class to represent a vector clock.*/
 @EqualsAndHashCode
-public class VectorClock {
-    public static enum Comparison { EQUAL, BIGGER, SMALLER, CONCURRENT }
+public class VectorClock implements java.io.Serializable{
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+
+	public static enum Comparison { EQUAL, BIGGER, SMALLER, CONCURRENT }
 
     private final Map<Integer, Integer> consistentCut = new HashMap<>();
 
     public VectorClock(@NonNull final VectorClock vc) {
-        this.consistentCut.putAll(vc.consistentCut);
+        for (Map.Entry<Integer, Integer> entry : vc.consistentCut.entrySet()) {
+            this.consistentCut.put(entry.getKey(), new Integer(entry.getValue()));
+        }
     }
 
     /*
@@ -90,10 +97,22 @@ public class VectorClock {
     /*
      * Get the clock for the ith process kept in this VectorClock.
      *
-     * @param i The index of the process whose clock to return.
-     * @return The clock for the ith process.
+     * @param pid The identifier of the process whose clock to return.
+     * @return The logical time of the specified process.
      */
     public int process(@NonNull final Integer pid) {
+        return consistentCut.get(pid);
+    }
+
+    /*
+     * Increment the logical time of the specified process by one.
+     *
+     * @param pid The identifier of the process to increment.
+     *
+     * @return The new logical time of process pid.
+     */
+    public int incrementProcess(@NonNull final Integer pid) {
+        consistentCut.put(pid, consistentCut.get(pid) + 1);
         return consistentCut.get(pid);
     }
 
@@ -110,7 +129,7 @@ public class VectorClock {
     public String toString() {
         final StringBuilder builder = new StringBuilder();
         for (Map.Entry<Integer, Integer> entry : consistentCut.entrySet()) {
-            final String entryStr = "{" + entry.getKey().toLogString() + ", " + entry.getValue() + "}";
+            final String entryStr = "{" + entry.getKey() + ", " + entry.getValue() + "}";
             builder.append(entryStr);
         }
         return "VectorClock{" +

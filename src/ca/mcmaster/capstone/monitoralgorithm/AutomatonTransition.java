@@ -1,12 +1,15 @@
 package ca.mcmaster.capstone.monitoralgorithm;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import ca.mcmaster.capstone.logger.Log;
 
 //import ca.mcmaster.capstone.networking.structures.NetworkPeerIdentifier;
 import lombok.EqualsAndHashCode;
@@ -17,9 +20,11 @@ import lombok.ToString;
 /* Class to represent an automaton transition.*/
 @EqualsAndHashCode @ToString
 public class AutomatonTransition {
-    @NonNull @Getter private AutomatonState from;
-    @NonNull @Getter private AutomatonState to;
-    private List<Conjunct> conjuncts = new ArrayList<>();
+    public static String LOG_TAG = "AutomatonTransition";
+
+    @NonNull @Getter private final AutomatonState from;
+    @NonNull @Getter private final AutomatonState to;
+    private final List<Conjunct> conjuncts = new ArrayList<>();
 
     public AutomatonTransition(@NonNull final AutomatonState from, @NonNull final AutomatonState to, @NonNull final List<Conjunct> conjuncts) {
         this.from = from;
@@ -36,8 +41,9 @@ public class AutomatonTransition {
      *
      * @return The evaluation of the transition based on its conjuncts.
      */
-    public Conjunct.Evaluation evaluate(@NonNull final Collection<ProcessState> processStates) {
+    public Conjunct.Evaluation evaluate(@NonNull final Collection<ProcessState> processStates) throws EvaluationException {
         final Map<Conjunct, Conjunct.Evaluation> evaluations = new HashMap<>();
+        //Log.d("testing", this.conjuncts.toString());
         for (final ProcessState state : processStates) {
             for (final Conjunct conjunct : this.conjuncts) {
                 if (conjunct.getOwnerProcess().equals(state.getId())) {
@@ -45,6 +51,11 @@ public class AutomatonTransition {
                 }
             }
         }
+
+        if (evaluations.isEmpty()) {
+            throw new EvaluationException("No conjuncts were evaluated with this Collection of states: " + processStates.toString());
+        }
+
         if (evaluations.values().contains(Conjunct.Evaluation.FALSE)) {
             return Conjunct.Evaluation.FALSE;
         } else if (evaluations.values().contains(Conjunct.Evaluation.NONE)) {
@@ -90,13 +101,23 @@ public class AutomatonTransition {
     public boolean enabled(@NonNull GlobalView globalView, @NonNull final List<Token> tokens) {
         Map<Integer, ProcessState> states = new HashMap<>(globalView.getStates());
         for (Token token : tokens) {
-            if (!token.isReturned()) {
-                return false;
-            }
             final ProcessState targetProcessState = token.getTargetProcessState();
             states.put(targetProcessState.getId(), targetProcessState);
         }
 
-        return this.evaluate(states.values()) == Conjunct.Evaluation.TRUE;
+        boolean evaluation = false;
+        try {
+            evaluation = this.evaluate(states.values()) == Conjunct.Evaluation.TRUE;
+        } catch (EvaluationException e) {
+            Log.d(LOG_TAG, e.getLocalizedMessage());
+        }
+
+        return evaluation;
+    }
+
+    public class EvaluationException extends Exception {
+        public EvaluationException(@NonNull final String message) {
+            super("Failed to evaluate: " + message);
+        }
     }
 }

@@ -24,6 +24,7 @@ public enum ComparisonOperator implements Operator<Double, Boolean>, BinaryOpera
         if (args.length != ARITY) {
             throw new ArityException(ARITY, args);
         }
+        System.out.print(Arrays.asList(args));
         if (Arrays.asList(args).contains(null)) {
             throw new NullPointerException("Tried to apply " + this + " to arguments including null: " + Arrays.toString(args));
         }
