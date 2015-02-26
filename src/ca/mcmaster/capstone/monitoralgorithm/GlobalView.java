@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
+
+import ca.mcmaster.capstone.logger.Log;
 //import ca.mcmaster.capstone.networking.structures.NetworkPeerIdentifier;
 import lombok.NonNull;
 import lombok.ToString;
@@ -22,6 +24,7 @@ public class GlobalView {
     private final Map<Integer, ProcessState> states = new HashMap<>();
     @NonNull private VectorClock cut;
     @NonNull private AutomatonState currentState;
+    String LOG_TAG="Monitor";
     //TODO: Maybe tokens, and pendingTransitions could be refactored into a Map<AutomatonTransitoin, Set<Token>>
     private final Set<Token> tokens = new HashSet<>();
     private final Queue<Event> pendingEvents = new ArrayDeque<>();
@@ -94,6 +97,7 @@ public class GlobalView {
 
     public void removePendingTransition(AutomatonTransition trans) {
         pendingTransitions.remove(trans);
+        removeTokensForTransition(trans);
     }
 
     /*
@@ -164,6 +168,24 @@ public class GlobalView {
     }
 
     /*
+     * Removes all tokens in the global view that are associated with a particular transition.
+     *
+     * @param transition The transition to match tokens against.
+     */
+    public void removeTokensForTransition(@NonNull final AutomatonTransition transition) {
+        final List<Conjunct> transConjuncts = transition.getConjuncts();
+        for (final Iterator<Token> it = this.tokens.iterator(); it.hasNext(); ) {
+            final Token token = it.next();
+            for (final Conjunct conjunct : token.getConjuncts()) {
+                if (transConjuncts.contains(conjunct)) {
+                    it.remove();
+                    break;
+                }
+            }
+        }
+    }
+
+    /*
      * Returns a set of process ids for processes that are inconsistent with the local vector clock.
      * A process is inconsistent if it's vector clock is not equal to or concurrent with this process'.
      *
@@ -218,26 +240,35 @@ public class GlobalView {
 
         // Filter the states for the ones needed for this transition and use the state from any tokens
         // that have returned from the processes in question instead of the old state.
-        for (ProcessState state : this.states.values()) {
-            if (participatingProcesses.contains(state.getId())) {
-                boolean useTokenState = false;
-                for (Token token : this.tokens) {
-                    if (token.isReturned() && new Integer(token.getDestination()).equals(state.getId())) {
-                        useTokenState = true;
-                        statesToCheck.add(token.getTargetProcessState());
-                    }
+        for (Integer process : participatingProcesses) {
+            final ProcessState state = this.states.get(process);
+            boolean useTokenState = false;
+            Token newestTokenSeen = null;
+            for (Token token : this.tokens) {
+                // We want to be looking at the most recent state.
+                if (newestTokenSeen == null || newestTokenSeen.getUniqueLocalIdentifier() < token.getUniqueLocalIdentifier()) {
+                    newestTokenSeen = token;
                 }
-                if (!useTokenState) {
-                    statesToCheck.add(state);
+                if (token.isReturned() && new Integer(token.getDestination()).equals(state.getId())) {
+                    useTokenState = true;
                 }
+            }
+            if (useTokenState) {
+                statesToCheck.add(newestTokenSeen.getTargetProcessState());
+            } else {
+                statesToCheck.add(state);
             }
         }
 
-        // Compare the vector clock of each state
+        Log.d(LOG_TAG, "Checking the consistency of " + statesToCheck);
+
+        // Compare the vector clock of each states
+        // FIXME: stop double checking earlier pairs of states.
         for (ProcessState state1 : statesToCheck) {
             for (ProcessState state2 : statesToCheck) {
                 if (!state1.equals(state2)) {
                     VectorClock.Comparison comp = state1.getVC().compareToClock(state2.getVC());
+                    Log.d(LOG_TAG, "Comparing: " + state1 + "\nto         " + state2 + "\nreturned: " + comp);
                     if (comp != VectorClock.Comparison.CONCURRENT
                             && comp != VectorClock.Comparison.EQUAL) {
                         return false;

@@ -1,5 +1,6 @@
 package ca.mcmaster.capstone.monitoralgorithm.tree;
 
+import java.io.Serializable;
 import java.util.Objects;
 
 import ca.mcmaster.capstone.monitoralgorithm.Conjunct;
@@ -10,7 +11,7 @@ import lombok.NonNull;
 import lombok.ToString;
 
 @EqualsAndHashCode @ToString
-public class BooleanExpressionTree {
+public class BooleanExpressionTree implements Serializable {
 
     @NonNull @Getter private final RootNode root;
 

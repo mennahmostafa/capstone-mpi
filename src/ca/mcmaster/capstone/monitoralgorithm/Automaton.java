@@ -70,7 +70,7 @@ public class Automaton {
             	 
                 conjunctsWithExpresssions.add(new Conjunct(virtualIdentifierMap.get("x" + conjunct.getOwnerProcess()), conjunct.getExpression()));
             }
-
+            Log.d("testing bardu", "conjunctsWithExpresssions: " + conjunctsWithExpresssions);
             INSTANCE.transitions.add(new AutomatonTransition(source, destination, conjunctsWithExpresssions));
         }
        // Log.d(LOG_TAG, "states: " + INSTANCE.states.toString());

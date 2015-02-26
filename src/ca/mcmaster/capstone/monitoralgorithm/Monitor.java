@@ -35,11 +35,12 @@ public class Monitor// extends Service
 
 	public final static String LOG_TAG = "monitor";
 
+	int maxMessageSize=5*10000*1024;
 	private final Map<Integer, Event> history = new HashMap<>();
 	private final Set<Token> waitingTokens = new LinkedHashSet<>();
 	private Integer monitorID = null;
 	private Integer rank= null;
-	private Integer size = null;
+	private static Integer size = null;
 	private final Set<GlobalView> GV = new HashSet<>();
 	private ExecutorService workQueue;
 	private volatile boolean cancelled = false;
@@ -91,11 +92,12 @@ public class Monitor// extends Service
 	}
 
 	public Monitor(int rank,int size) {
+
 		this.rank=rank;
 		this.monitorID=this.rank+1;
 		this.size=size;
 		System.out.print("I am monitor M"+this.rank+"\n");
-
+		Log.fileName="M"+rank;
 	}
 
 	//    @Override
@@ -161,20 +163,21 @@ public class Monitor// extends Service
 
 		//        //FIXME: This is pretty messy. We can probably do better given some time to think.
 		List<InitialState.ValuationDummy> valuationDummies=automatonInitializer.getInitialState().getValuations();
-		
+
 		Map<Integer, Integer> initialVectorClock = new HashMap<>();
 		Map<Integer, Valuation> valuations = new HashMap<>();
+		int idx=1;
 		for (InitialState.ValuationDummy valuation : valuationDummies) {
 			Map<String, Double> val = new HashMap<>();
 			for (InitialState.Variable variable : valuation.getVariables()) {
 				val.put(variable.getVariable(), Double.parseDouble(variable.getValue()));
 				//System.out.print((variable.getVariable()+" = "+Double.parseDouble(variable.getValue())));
 			} 
-			for(int i=1;i<=size;i++)
-			{
-				initialVectorClock.put(i, 0);
-				valuations.put(i, new Valuation(val));
-			} 
+
+			initialVectorClock.put(idx, 0);
+			valuations.put(idx, new Valuation(val));
+			idx+=1;
+
 		}
 
 		VectorClock vectorClock = new VectorClock(initialVectorClock);
@@ -186,7 +189,7 @@ public class Monitor// extends Service
 		final GlobalView initialGV = new GlobalView();
 		initialGV.setCurrentState(automaton.getInitialState());
 		initialGV.setStates(initialStates);
-		Log.d("testinggggg", initialGV.getStates().toString());
+
 		initialGV.setCurrentState(automaton.advance(initialGV));
 		initialGV.setCut(vectorClock);
 		synchronized (GV) {
@@ -241,10 +244,13 @@ public class Monitor// extends Service
 
 		try
 		{
-			byte[] message = new byte [10000] ;
-			Status status=MPI.COMM_WORLD.recv(message, 10000, MPI.BYTE,MPI.ANY_SOURCE,MessageTags.ProgramTerminating.ordinal());
+
+			Log.d(LOG_TAG, "Entering : receiveProgramTerminatingMessage");
+			byte[] message = new byte[maxMessageSize];
+			Status status=MPI.COMM_WORLD.recv(message, maxMessageSize, MPI.BYTE,MPI.ANY_SOURCE,MessageTags.ProgramTerminating.ordinal());
 			Object o = CollectionUtils.deserializeObject(message);
 			Event event= (Event)o;
+			Log.d(LOG_TAG, "Exiting : receiveProgramTerminatingMessage");
 			return event;
 		}
 		catch(Exception e)
@@ -274,9 +280,10 @@ public class Monitor// extends Service
 	private Token receiveTokenMessage() throws MPIException, IOException, ClassNotFoundException
 	{
 
-		byte[] message = new byte [10000] ;
+		Log.d(LOG_TAG, "Entering: receiveTokenMessage");
+		byte[] message = new byte[maxMessageSize];
 
-		Status status=MPI.COMM_WORLD.recv(message, 10000, MPI.BYTE,MPI.ANY_SOURCE,MessageTags.Token.ordinal());
+		Status status=MPI.COMM_WORLD.recv(message, maxMessageSize, MPI.BYTE,MPI.ANY_SOURCE,MessageTags.Token.ordinal());
 
 
 		Object o = CollectionUtils.deserializeObject(message);
@@ -291,10 +298,10 @@ public class Monitor// extends Service
 		if(status!=null && !status.isCancelled())
 		{
 
-			Log.d(LOG_TAG, "pollTokens: attempting read event");
+			Log.d(LOG_TAG, "pollEvents: attempting read event");
 			final Event event = read();
 			if (event != null) {
-				Log.d(LOG_TAG, "pollTokens: receiveTokenMessage returned a token");
+				Log.d(LOG_TAG, "pollEvents: read returned an event ");
 				receiveEvent(event);
 			}
 		}
@@ -302,11 +309,15 @@ public class Monitor// extends Service
 
 
 	private Event read() throws ClassNotFoundException, IOException, MPIException {
-		byte[] message = new byte [10000] ;
 
-		Status status=MPI.COMM_WORLD.recv(message, 10000, MPI.BYTE,MPI.ANY_SOURCE,MessageTags.Token.ordinal());
+		Log.d(LOG_TAG, "Entering read event");
+		
+		byte[] message = new byte[maxMessageSize];
+
+		Status status=MPI.COMM_WORLD.recv(message, maxMessageSize, MPI.BYTE,MPI.ANY_SOURCE,MessageTags.Event.ordinal());
 		Object o = CollectionUtils.deserializeObject(message);
 		Event event = (Event)o;
+		Log.d(LOG_TAG, "exiting read event");
 		return event;
 
 
@@ -318,7 +329,7 @@ public class Monitor// extends Service
 	 * @param event The event to be processed.
 	 */
 	public void receiveEvent(@NonNull final Event event) throws ClassNotFoundException, IOException, MPIException {
-		Log.d(LOG_TAG, "Entering receiveEvent");
+		Log.d(LOG_TAG, "Entering receiveEvent. Event: " + event.toString());
 		synchronized (history) {
 			history.put(event.getEid(), event);
 		}
@@ -346,15 +357,24 @@ public class Monitor// extends Service
 		TokenSender.bulkSendTokens();
 		Log.d(LOG_TAG, "Exiting receiveEvent.");
 	}
+	private static int getProcessMonitorID(int processID)
+	{
+		return ((processID-1)+size);
+	}
 	private static void send(@NonNull final Token token, @NonNull final Integer pid)throws ClassNotFoundException, IOException, MPIException {
 
-		byte[] yourBytes = CollectionUtils.serializeObject(token);
+		byte[] tokenBytes = CollectionUtils.serializeObject(token);
+		java.nio.ByteBuffer out = MPI.newByteBuffer(tokenBytes.length);
+
+		for(int i = 0; i < tokenBytes.length; i++){
+			out.put(i, tokenBytes[i]);
+		}
 		if (pid.equals(token.getOwner())) {
 			Log.d(LOG_TAG, "Sending a token back home. To: " + pid.toString());
 		} else {
-			Log.d(LOG_TAG, "Sending a token. To: " + pid.toString());
+			Log.d(LOG_TAG, "Sending a token to: P" + pid.toString());
 		}
-		MPI.COMM_WORLD.iSend(MPI.slice(yourBytes,0), 10000, MPI.BYTE, pid.intValue()-1, MessageTags.Token.ordinal());
+		MPI.COMM_WORLD.iSend(MPI.slice(out,0), tokenBytes.length, MPI.BYTE, getProcessMonitorID(pid.intValue()), MessageTags.Token.ordinal());
 
 
 	}
@@ -385,7 +405,7 @@ public class Monitor// extends Service
 	 * @param event The event to be evaluated.
 	 */
 	public void processEvent(@NonNull final GlobalView gv, @NonNull final Event event) throws MPIException, ClassNotFoundException, IOException {
-		Log.d(LOG_TAG, "Entering processEvent");
+		Log.d(LOG_TAG, "Entering processEvent, Event: " + event.toString() +"gv.cut: "+gv.getCut());
 		gv.updateWithEvent(event);
 		gv.setCurrentState(automaton.advance(gv));
 		handleMonitorStateChange(gv);
@@ -438,8 +458,9 @@ public class Monitor// extends Service
 	private void checkOutgoingTransitions(@NonNull final GlobalView gv, @NonNull final Event event) {
 		Log.d(LOG_TAG, "Entering checkOutgoingTransitions");
 		final Map<Integer, Set<AutomatonTransition>> consult = new HashMap<>();
-		final Set<Conjunct> forbiddingConjuncts = new HashSet<>();
 		for (final AutomatonTransition trans : automaton.getTransitions()) {
+			final Set<Conjunct> forbiddingConjuncts = new HashSet<>();
+
 			final AutomatonState current = gv.getCurrentState();
 			if (trans.getFrom().equals(current) && !trans.getTo().equals(current)) {
 				final Set<Integer> participating = trans.getParticipatingProcesses();
@@ -468,13 +489,15 @@ public class Monitor// extends Service
 
 		final List<Token> pendingSend = TokenSender.getTokensToSendOut();
 		for (final Map.Entry<Integer, Set<AutomatonTransition>> entry : consult.entrySet()) {
-			Token.Builder builder = new Token.Builder(monitorID, entry.getKey());
+			final Integer destination = entry.getKey();
+			Log.d(LOG_TAG, "Need to send a token to: " + destination + "\n    to gather information about these transitions: " + entry.getValue());
+			Token.Builder builder = new Token.Builder(monitorID, destination);
 			for (Iterator<Token> it = pendingSend.iterator(); it.hasNext(); ) {
 				final Token token = it.next();
 				VectorClock.Comparison comparison = token.getCut().compareToClock(event.getVC());
-				if (new Integer(token.getDestination()).equals(entry.getKey())
+				if (new Integer(token.getDestination()).equals(destination)
 						&& comparison == VectorClock.Comparison.EQUAL
-						&& token.getTargetEventId() == gv.getCut().process(entry.getKey()) + 1) {
+						&& token.getTargetEventId() == gv.getCut().process(destination) + 1) {
 					//Modify one of the pending tokens
 					builder = new Token.Builder(token);
 					it.remove();
@@ -486,7 +509,7 @@ public class Monitor// extends Service
 			final Set<Conjunct> conjuncts = new HashSet<>();
 			for (AutomatonTransition transition : entry.getValue()) {
 				for (Conjunct conjunct : transition.getConjuncts()) {
-					if (conjunct.getOwnerProcess().equals(entry.getKey())) {
+					if (conjunct.getOwnerProcess().equals(destination)) {
 						conjuncts.add(conjunct);
 					}
 				}
@@ -497,12 +520,12 @@ public class Monitor// extends Service
 			for (final Conjunct conjunct : conjuncts) {
 				forToken.put(conjunct, Conjunct.Evaluation.NONE);
 			}
-			final Token token = builder.targetEventId(gv.getCut().process(entry.getKey()) + 1)
+			final Token token = builder.targetEventId(gv.getCut().process(destination) + 1)
 					.cut(event.getVC()).conjuncts(forToken).automatonTransitions(entry.getValue())
 					.build();
 			pendingSend.add(token);
 		}
-		gv.addTokens(pendingSend);
+		gv.addTokens(new ArrayList(pendingSend));
 		TokenSender.bulkTokenSendOut(pendingSend);
 		Log.d(LOG_TAG, "Exiting checkOutgoingTransitions");
 	}
@@ -525,17 +548,23 @@ public class Monitor// extends Service
 					Log.d(LOG_TAG, "Checking if transition is enabled: " + trans.toString());
 					// Get other tokens for same transition
 					final List<Token> tokens = globalView.getTokensForTransition(trans);
+					for (Token tok : tokens) {
+						if (!tok.isReturned()) {
+							Log.d(LOG_TAG, "Not all tokens for this transition have been returned. Could not find: " + tok);
+							return;
+						}
+					}
 					if (trans.enabled(globalView, tokens) && globalView.consistent(trans)) {
 						hasEnabled |= true;
 						Log.d(LOG_TAG, "The transition is enabled and the global view is consistent.");
 						globalView.reduceStateFromTokens(tokens);
+						globalView.removePendingTransition(trans);
 						final GlobalView gvn1 = new GlobalView(globalView);
 						final GlobalView gvn2 = new GlobalView(globalView);
 						gvn1.setCurrentState(trans.getTo());
 						gvn2.setCurrentState(trans.getTo());
 						gvn1.setTokens(new ArrayList<Token>());
 						gvn2.setTokens(new ArrayList<Token>());
-						globalView.getPendingTransitions().remove(trans);
 						synchronized (GV) {
 							GV.add(gvn1);
 							Log.d(LOG_TAG, "gvn1: " + gvn1.toString());
@@ -567,7 +596,9 @@ public class Monitor// extends Service
 					}
 				} else {
 					final Token maxConjuncts = globalView.getTokenWithMostConjuncts();
-					TokenSender.sendTokenOut(maxConjuncts);
+					if (maxConjuncts != null) {
+						TokenSender.sendTokenOut(maxConjuncts);
+					}
 				}
 			}
 		} else {

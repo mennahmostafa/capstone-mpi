@@ -1,5 +1,7 @@
 package ca.mcmaster.capstone.monitoralgorithm;
 
+import java.io.Serializable;
+
 import ca.mcmaster.capstone.monitoralgorithm.tree.BooleanExpressionTree;
 import ca.mcmaster.capstone.monitoralgorithm.tree.parser.BooleanExpressionParser;
 import lombok.EqualsAndHashCode;
@@ -8,7 +10,7 @@ import lombok.NonNull;
 import lombok.ToString;
 
 @EqualsAndHashCode
-public class Conjunct {
+public class Conjunct implements Serializable {
     public static enum Evaluation {TRUE, FALSE, NONE}
 
     @NonNull @Getter private final Integer ownerProcess;

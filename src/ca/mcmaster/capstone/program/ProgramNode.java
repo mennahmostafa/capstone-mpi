@@ -13,27 +13,28 @@ import ca.mcmaster.capstone.monitoralgorithm.Event.EventType;
 import ca.mcmaster.capstone.util.*;
 public class ProgramNode {
 
-	int rank,size;
+	int rank,size,processID;
 	VectorClock vectorClock;
-	int heartbeatIntervalInSeconds=3*1000;
-	int eventIntervalInSeconds=5*1000;
+	int heartbeatIntervalInSeconds=3;
+	int eventIntervalInSeconds=5;
 	Double x=new Double(0);
-	final int  maxMessageSize=100000;
+	final int  maxMessageSize=1024*5*1000;
 	long startTime;
 	int simulationTimeInSeconds=120*1000; //2 mins
 	public ProgramNode(int rank,int size) throws IOException, MPIException {
 		this.rank=rank;
 		this.size=size; 
+		this.processID=rank+1;
 		Map<Integer,Integer> consistentCut=  new HashMap<>();
 
-		for (int i=0;i<size;i++) {
+		for (int i=1;i<=size;i++) {
 			consistentCut.put(i, 0);
 		}
 		this.vectorClock=new VectorClock(consistentCut);
 		//initialEvent
-		this.vectorClock.incrementProcess(rank);
+		this.vectorClock.incrementProcess(processID);
 		sendEventToMonitor(MessageTags.Event);
-
+		Log.fileName="P"+rank;
 	}
 	public void start() throws IOException, MPIException, ClassNotFoundException{
 		
@@ -47,19 +48,20 @@ public class ProgramNode {
 			long currentTime=System.currentTimeMillis();
 			if(currentTime>=nextHeartBeat)
 			{
+				Log.d("program", "\n\nBROADCASTINGGGGGGGGGGGGG\n");
 				broadcast();
 			}
 			if(currentTime>=nextEventUpdate)
 			{
 				generateEvent();
-				this.vectorClock.incrementProcess(rank);
+				this.vectorClock.incrementProcess(processID);
 				sendEventToMonitor(MessageTags.Event);
 			}
 			receiveHeartbeat();
 			boolean finalStateFound=receiveMonitorFinalState();
 			if(System.currentTimeMillis()>=endTime || finalStateFound)
 			{
-				this.vectorClock.incrementProcess(rank);
+				this.vectorClock.incrementProcess(processID);
 				sendEventToMonitor(MessageTags.ProgramTerminating);
 				break;
 			}
@@ -74,16 +76,19 @@ public class ProgramNode {
 		if(status!=null && !status.isCancelled())
 		{
 
-			//byte[] message = new byte [maxMessageSize] ;
-			java.nio.ByteBuffer message = MPI.newByteBuffer(maxMessageSize);
+			Log.d("program", "Entering receiveHeartbeat");
+			//java.nio.ByteBuffer  message= MPI.newByteBuffer(maxMessageSize);
+			 byte[] message=new byte[maxMessageSize];
 
-			MPI.COMM_WORLD.recv(message, maxMessageSize, MPI.BYTE,MPI.ANY_SOURCE,MessageTags.HeartBeat.ordinal());
-
-			Object o =CollectionUtils.deserializeObject(message.array());
+			MPI.COMM_WORLD.recv(message, maxMessageSize, MPI.BYTE,status.getSource(),MessageTags.HeartBeat.ordinal());
+			//System.out.print("\n\n receiving a heartbeat\n\n" + message.toString());
+			Object o =CollectionUtils.deserializeObject(message);
+			System.out.print("\n\n deserializing object\n\n");
 			VectorClock otherVC = (VectorClock)o;
-			this.vectorClock.incrementProcess(rank);
+			this.vectorClock.incrementProcess(processID);
 			this.vectorClock.merge(otherVC);
 			sendEventToMonitor(MessageTags.Event);
+			Log.d("program", "Exiting receiveHeartbeat");
 		}
 	}
 
@@ -117,6 +122,7 @@ public class ProgramNode {
 	}
 	private void broadcast() throws MPIException, IOException
 	{
+		Log.d("program", "Entering broadcast");
 		for(int i=0;i<size;i++)
 		{
 			if( i == rank)
@@ -127,10 +133,11 @@ public class ProgramNode {
 			java.nio.ByteBuffer out = MPI.newByteBuffer(vectorClockBytes.length);
 
 			for(int j = 0; j < vectorClockBytes.length; j++){
-				out.put(j, vectorClockBytes[i]);
+				out.put(j, vectorClockBytes[j]);
 			}
-			MPI.COMM_WORLD.iSend(MPI.slice(out,0), maxMessageSize, MPI.BYTE, i, MessageTags.HeartBeat.ordinal());
+			MPI.COMM_WORLD.iSend(MPI.slice(out,0), vectorClockBytes.length, MPI.BYTE, i, MessageTags.HeartBeat.ordinal());
 		} 
+		Log.d("program", "Entering broadcast");
 	}
 	// implement here logic for program
 	private void generateEvent(){
@@ -152,9 +159,10 @@ public class ProgramNode {
 
 
 	private void sendEventToMonitor( MessageTags tag) throws IOException, MPIException{
+		Log.d("program", "Entering sendEventToMonitor");
 		Map<String,Double> valuation=  new HashMap<>();
 		valuation.put("x"+(this.rank+1), x);
-		Event e=new Event(this.vectorClock.process(rank), rank, EventType.SEND, new Valuation(valuation), this.vectorClock);
+		Event e=new Event(this.vectorClock.process(rank+1), rank+1, EventType.SEND, new Valuation(valuation), this.vectorClock);
 		byte[] eventBytes=CollectionUtils.serializeObject(e);
 		java.nio.ByteBuffer out = MPI.newByteBuffer(eventBytes.length);
 
@@ -162,7 +170,7 @@ public class ProgramNode {
 			out.put(i, eventBytes[i]);
 		}
 		MPI.COMM_WORLD.iSend(out, maxMessageSize, MPI.BYTE, getMonitorId(), tag.ordinal());
-
+		Log.d("program", "Exiting sendEventToMonitor");
 	}
 
 

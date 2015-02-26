@@ -1,5 +1,6 @@
 package ca.mcmaster.capstone.monitoralgorithm;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -19,8 +20,13 @@ import lombok.ToString;
 
 /* Class to represent an automaton transition.*/
 @EqualsAndHashCode @ToString
-public class AutomatonTransition {
-    public static String LOG_TAG = "AutomatonTransition";
+public class AutomatonTransition implements Serializable {
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+
+	public static String LOG_TAG = "AutomatonTransition";
 
     @NonNull @Getter private final AutomatonState from;
     @NonNull @Getter private final AutomatonState to;
@@ -43,9 +49,10 @@ public class AutomatonTransition {
      */
     public Conjunct.Evaluation evaluate(@NonNull final Collection<ProcessState> processStates) throws EvaluationException {
         final Map<Conjunct, Conjunct.Evaluation> evaluations = new HashMap<>();
-        //Log.d("testing", this.conjuncts.toString());
+        
         for (final ProcessState state : processStates) {
             for (final Conjunct conjunct : this.conjuncts) {
+            	Log.d("testing: ","state id:"+ state.getId() +" conjunct" + conjunct);
                 if (conjunct.getOwnerProcess().equals(state.getId())) {
                     evaluations.put(conjunct, conjunct.evaluate(state));
                 }
