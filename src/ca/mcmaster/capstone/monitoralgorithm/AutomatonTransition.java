@@ -52,7 +52,7 @@ public class AutomatonTransition implements Serializable {
         
         for (final ProcessState state : processStates) {
             for (final Conjunct conjunct : this.conjuncts) {
-            	Log.d("testing: ","state id:"+ state.getId() +" conjunct" + conjunct);
+            	
                 if (conjunct.getOwnerProcess().equals(state.getId())) {
                     evaluations.put(conjunct, conjunct.evaluate(state));
                 }

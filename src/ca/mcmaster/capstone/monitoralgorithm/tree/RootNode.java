@@ -13,7 +13,15 @@ import lombok.ToString;
 /* Root node must be a comparison */
 @ToString @Getter @EqualsAndHashCode(callSuper = true)
 public class RootNode extends InnerNode<Boolean, Double> implements Serializable {
-    public RootNode(final Node<Double> left, final Node<Double> right, final Operator<Double, Boolean> operator) {
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+	public RootNode()
+	{
+
+	}
+	public RootNode(final Node<Double> left, final Node<Double> right, final Operator<Double, Boolean> operator) {
         super(left, right, operator);
     }
 

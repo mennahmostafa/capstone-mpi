@@ -14,7 +14,7 @@ public class VariableNode extends LeafNode<String, Double> {
     }
 
     @Override public Double evaluate(@NonNull final ProcessState state) {
-    	System.out.print("TESTINGGG"+state.getVal().getValue(value));
+    	
         return state.getVal().getValue(value);
     }
 }

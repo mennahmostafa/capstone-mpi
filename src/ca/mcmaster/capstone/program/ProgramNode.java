@@ -15,16 +15,17 @@ public class ProgramNode {
 
 	int rank,size,processID;
 	VectorClock vectorClock;
-	int heartbeatIntervalInSeconds=3;
-	int eventIntervalInSeconds=5;
+	final int heartbeatIntervalInSeconds=10*1000;
+	final int eventIntervalInSeconds=20*1000;
 	Double x=new Double(0);
-	final int  maxMessageSize=1024*5*1000;
+	final int  maxMessageSize=1024*5;
 	long startTime;
 	int simulationTimeInSeconds=120*1000; //2 mins
 	public ProgramNode(int rank,int size) throws IOException, MPIException {
 		this.rank=rank;
 		this.size=size; 
 		this.processID=rank+1;
+		Log.fileName="P"+rank+"_";
 		Map<Integer,Integer> consistentCut=  new HashMap<>();
 
 		for (int i=1;i<=size;i++) {
@@ -34,40 +35,43 @@ public class ProgramNode {
 		//initialEvent
 		this.vectorClock.incrementProcess(processID);
 		sendEventToMonitor(MessageTags.Event);
-		Log.fileName="P"+rank;
-	}
-	public void start() throws IOException, MPIException, ClassNotFoundException{
 		
-		System.out.print("I am process P"+this.rank+"\n");
+	}
+	public void start() throws IOException, MPIException, ClassNotFoundException, InterruptedException{
+		
+		Log.v("program","I am process P"+this.rank+"\n");
 		startTime=System.currentTimeMillis();
 		long endTime=startTime+simulationTimeInSeconds;
 		long nextHeartBeat=System.currentTimeMillis()+heartbeatIntervalInSeconds;
 		long nextEventUpdate=System.currentTimeMillis()+eventIntervalInSeconds;
+		broadcast();
 		while(true)
 		{
 			long currentTime=System.currentTimeMillis();
 			if(currentTime>=nextHeartBeat)
 			{
-				Log.d("program", "\n\nBROADCASTINGGGGGGGGGGGGG\n");
+				
 				broadcast();
+				nextHeartBeat=System.currentTimeMillis()+heartbeatIntervalInSeconds;
+				 
 			}
 			if(currentTime>=nextEventUpdate)
 			{
 				generateEvent();
-				this.vectorClock.incrementProcess(processID);
-				sendEventToMonitor(MessageTags.Event);
+				nextEventUpdate=System.currentTimeMillis()+eventIntervalInSeconds;
+				
 			}
 			receiveHeartbeat();
 			boolean finalStateFound=receiveMonitorFinalState();
 			if(System.currentTimeMillis()>=endTime || finalStateFound)
 			{
+				Log.v("program", "Terminating program");
 				this.vectorClock.incrementProcess(processID);
 				sendEventToMonitor(MessageTags.ProgramTerminating);
 				break;
 			}
-			nextHeartBeat=System.currentTimeMillis()+heartbeatIntervalInSeconds;
-			nextEventUpdate=System.currentTimeMillis()+eventIntervalInSeconds;
-
+			
+			Thread.sleep(5000);
 		}
 	}
 	private void receiveHeartbeat() throws MPIException, ClassNotFoundException, IOException{
@@ -76,17 +80,17 @@ public class ProgramNode {
 		if(status!=null && !status.isCancelled())
 		{
 
-			Log.d("program", "Entering receiveHeartbeat");
+			
 			//java.nio.ByteBuffer  message= MPI.newByteBuffer(maxMessageSize);
 			 byte[] message=new byte[maxMessageSize];
 
 			MPI.COMM_WORLD.recv(message, maxMessageSize, MPI.BYTE,status.getSource(),MessageTags.HeartBeat.ordinal());
-			//System.out.print("\n\n receiving a heartbeat\n\n" + message.toString());
+			
 			Object o =CollectionUtils.deserializeObject(message);
-			System.out.print("\n\n deserializing object\n\n");
 			VectorClock otherVC = (VectorClock)o;
 			this.vectorClock.incrementProcess(processID);
-			this.vectorClock.merge(otherVC);
+			this.vectorClock=this.vectorClock.merge(otherVC);
+			Log.v("program", "Sending receive Event to monitor");
 			sendEventToMonitor(MessageTags.Event);
 			Log.d("program", "Exiting receiveHeartbeat");
 		}
@@ -108,13 +112,13 @@ public class ProgramNode {
 			if(verdict[0]=='S')
 			{
 				// satisfaction state
-				Log.d("SATISFACTION", "");
+				Log.v("program","SATISFACTION");
 				finalStateFound=true;
 			}
 			if(verdict[0]=='V')
 			{
 				// violation state
-				Log.d("VIOLATION", "");
+				Log.v("program","VIOLATION");
 				finalStateFound=true;
 			}
 		}
@@ -122,7 +126,7 @@ public class ProgramNode {
 	}
 	private void broadcast() throws MPIException, IOException
 	{
-		Log.d("program", "Entering broadcast");
+		Log.v("program", "Entering broadcast");
 		for(int i=0;i<size;i++)
 		{
 			if( i == rank)
@@ -140,12 +144,18 @@ public class ProgramNode {
 		Log.d("program", "Entering broadcast");
 	}
 	// implement here logic for program
-	private void generateEvent(){
+	private void generateEvent() throws IOException, MPIException{
 		if(rank ==2 || rank==3) //p3.x=1 and p4.x=1
 		{
-			long currentTime= System.currentTimeMillis();
+				long currentTime= System.currentTimeMillis();
 			if(currentTime-startTime>60*1000)
 			{
+
+				Log.v("program", "generating Event");
+				 
+				this.vectorClock.incrementProcess(processID);
+				sendEventToMonitor(MessageTags.Event);
+				Log.v("program", "flipping x");
 				this.x=1.0;
 			}
 		}
@@ -159,18 +169,20 @@ public class ProgramNode {
 
 
 	private void sendEventToMonitor( MessageTags tag) throws IOException, MPIException{
-		Log.d("program", "Entering sendEventToMonitor");
+		Log.d("program", "Entering sendEventToMonitor: M"+  getMonitorId());
 		Map<String,Double> valuation=  new HashMap<>();
-		valuation.put("x"+(this.rank+1), x);
-		Event e=new Event(this.vectorClock.process(rank+1), rank+1, EventType.SEND, new Valuation(valuation), this.vectorClock);
+		valuation.put("x"+(processID), x);
+		Event e=new Event(this.vectorClock.process(processID), processID, EventType.SEND, new Valuation(valuation), this.vectorClock);
 		byte[] eventBytes=CollectionUtils.serializeObject(e);
 		java.nio.ByteBuffer out = MPI.newByteBuffer(eventBytes.length);
-
+		Log.v("program", "SENDING sendEventToMonitor: message size: "+ eventBytes.length);
 		for(int i = 0; i < eventBytes.length; i++){
 			out.put(i, eventBytes[i]);
 		}
-		MPI.COMM_WORLD.iSend(out, maxMessageSize, MPI.BYTE, getMonitorId(), tag.ordinal());
-		Log.d("program", "Exiting sendEventToMonitor");
+		Request request=MPI.COMM_WORLD.iSend(out, eventBytes.length, MPI.BYTE, getMonitorId(), tag.ordinal());
+		//request.waitFor();
+		
+		Log.d("program", "Exiting sendEventToMonitor: message size: "+ eventBytes.length);
 	}
 
 

@@ -2,6 +2,7 @@ package ca.mcmaster.capstone.program;
 import java.io.IOException;
 
 import mpi.*;
+import ca.mcmaster.capstone.logger.Log;
 import ca.mcmaster.capstone.monitoralgorithm.*;
 public class Node {
 
@@ -13,8 +14,9 @@ public class Node {
 	 * @throws MPIException 
 	 * @throws IOException 
 	 * @throws ClassNotFoundException 
+	 * @throws InterruptedException 
 	 */
-	public static void main(String[] args) throws MPIException, ClassNotFoundException, IOException {
+	public static void main(String[] args) throws MPIException, ClassNotFoundException, IOException, InterruptedException {
 	 
 		// 1- initialise mpi 
 		initializeMPI(args);
@@ -35,7 +37,9 @@ public class Node {
 		}
 			
 		// 3- start producing events and waiting to receive messages from other nodes
+		MPI.COMM_WORLD.barrier();
 		MPI.Finalize();
+		Log.d("NODE", "MPI FINALIZED!!");
 	}
 	
 	public static void initializeMPI(String[] args) throws MPIException {

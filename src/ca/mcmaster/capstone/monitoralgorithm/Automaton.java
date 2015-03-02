@@ -70,11 +70,10 @@ public class Automaton {
             	 
                 conjunctsWithExpresssions.add(new Conjunct(virtualIdentifierMap.get("x" + conjunct.getOwnerProcess()), conjunct.getExpression()));
             }
-            Log.d("testing bardu", "conjunctsWithExpresssions: " + conjunctsWithExpresssions);
             INSTANCE.transitions.add(new AutomatonTransition(source, destination, conjunctsWithExpresssions));
         }
-       // Log.d(LOG_TAG, "states: " + INSTANCE.states.toString());
-       // Log.d(LOG_TAG, "transitions: " + INSTANCE.transitions.toString());
+        Log.d(LOG_TAG, "states: " + INSTANCE.states.toString());
+        Log.d(LOG_TAG, "transitions: " + INSTANCE.transitions.toString());
     }
 
     /*
@@ -97,13 +96,13 @@ public class Automaton {
             if (transition.getFrom().equals(gv.getCurrentState()) && !transition.getFrom().equals(transition.getTo())) {
                 boolean evaluation = false;
                 try {
-                	//Log.d("testing",transition.toString());
+                	
                     evaluation = transition.evaluate(gv.getStates().values()) == Conjunct.Evaluation.TRUE;
                 } catch (AutomatonTransition.EvaluationException e) {
                     Log.d(LOG_TAG, e.getLocalizedMessage());
                 }
                 if (evaluation) {
-                    Log.d(LOG_TAG, "Advanced along transition: " + transition.toString());
+                    Log.v(LOG_TAG, "Advanced along transition: " + transition.toString());
                     return transition.getTo();
                 }
             }

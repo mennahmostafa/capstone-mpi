@@ -18,6 +18,7 @@ import java.text.SimpleDateFormat;
 public  class Log { 
 	public class Logstream implements Runnable {
 
+		private boolean firstFileOpen=true;
 		private final String _path;         // The root path we will use for logging
 		private final int _port;            // the port of the application using this logger
 		private final BlockingQueue<StringBuilder> _queue; // Used to queue up messages for logging
@@ -65,10 +66,10 @@ public  class Log {
 
 			try {
 
-				System.out.println(data);
+				//System.out.println(data);
 
 				writer = getOutputStream();
-
+				firstFileOpen=false;
 				writer.write(data);
 				writer.newLine();
 				writer.flush();             
@@ -110,7 +111,8 @@ public  class Log {
 		}
 
 		private BufferedWriter getOutputStream() throws IOException {
-			return new BufferedWriter(new FileWriter(getPath(), true));         
+			return new BufferedWriter(new FileWriter(getPath(), !firstFileOpen)); 
+			
 		}
 
 		private void closeOutputStream(BufferedWriter writer) {
@@ -192,7 +194,7 @@ public  class Log {
 			instance=new Log();
 			_eventLog =  instance.create( fileName,  1);
 		}
-
+		System.out.println(fileName+" : "+tag+" : "+message);
 		instance.write(message,tag);
 
 	}

@@ -20,11 +20,12 @@ import lombok.ToString;
 /* Class to represent the local view of the global state.*/
 @ToString
 public class GlobalView {
+    private static final String LOG_TAG = "GlobalView";
+
     // FIXME: Storing these like this is needlessly error prone. Should probably be a set.
     private final Map<Integer, ProcessState> states = new HashMap<>();
     @NonNull private VectorClock cut;
     @NonNull private AutomatonState currentState;
-    String LOG_TAG="Monitor";
     //TODO: Maybe tokens, and pendingTransitions could be refactored into a Map<AutomatonTransitoin, Set<Token>>
     private final Set<Token> tokens = new HashSet<>();
     private final Queue<Event> pendingEvents = new ArrayDeque<>();
@@ -176,12 +177,16 @@ public class GlobalView {
         final List<Conjunct> transConjuncts = transition.getConjuncts();
         for (final Iterator<Token> it = this.tokens.iterator(); it.hasNext(); ) {
             final Token token = it.next();
-            for (final Conjunct conjunct : token.getConjuncts()) {
-                if (transConjuncts.contains(conjunct)) {
+            for (final Conjunct conjunct : token.getConjuncts())
+            {
+                if (transConjuncts.contains(conjunct)) 
+                {
                     it.remove();
                     break;
                 }
             }
+            
+            
         }
     }
 

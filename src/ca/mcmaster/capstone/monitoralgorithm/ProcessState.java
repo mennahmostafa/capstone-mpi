@@ -1,13 +1,15 @@
 package ca.mcmaster.capstone.monitoralgorithm;
 
 //import ca.mcmaster.capstone.networking.structures.NetworkPeerIdentifier;
+import java.io.Serializable;
+
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.ToString;
 
 @ToString
-public class ProcessState {
+public class ProcessState implements Serializable{
     @NonNull @Getter private final Integer id;
     @NonNull private final Valuation val;
     @NonNull private final VectorClock VC;

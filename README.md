@@ -14,3 +14,6 @@ guide: http://users.dsic.upv.es/~jroman/preprints/ompi-java.pdf
 
 run code:
 mpirun -np 8 java -cp /ca/mcmaster/capstone/program/*:/ca/mcmaster/capstone/monitoralgorithm/*:/ca/mcmaster/capstone/util/*:/ca/mcmaster/capstone/initializer/*:/ca/mcmaster/capstone/logger/*:../../libs/*  ca.mcmaster.capstone.program.Node
+
+Logging:
+http://www.andrescottwilson.com/thread-safe-logging-to-file-using-java/

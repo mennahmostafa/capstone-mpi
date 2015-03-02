@@ -155,7 +155,7 @@ import ca.mcmaster.capstone.util.*;
         private   final File AUTOMATON_FILE = new File(Environment.getExternalStorageDirectory(), "monitorInit/automaton.json");
         private   final File CONJUNCT_FILE = new File(Environment.getExternalStorageDirectory(), "monitorInit/conjunct_mapping.my");
         private     final File INITIAL_STATE_FILE = new File(Environment.getExternalStorageDirectory(), "monitorInit/initial_state.json");
-        private final CountDownLatch latch = new CountDownLatch(1);
+        
         private AutomatonFile automaton = null;
         private final List<ConjunctFromFile> conjunctMap = new ArrayList<>();
         private InitialState initialState = null;
@@ -181,36 +181,23 @@ import ca.mcmaster.capstone.util.*;
             } catch (final Exception e) {
                 throw new IllegalStateException(e);
             }
-            latch.countDown();
+          
         }
 
         public AutomatonFile getAutomatonFile() {
         	run();
-            waitForLatch(latch);
             return automaton;
         }
 
         public List<ConjunctFromFile> getConjunctMap() {
-            waitForLatch(latch);
             return conjunctMap;
         }
 
         public InitialState getInitialState() {
-            waitForLatch(latch);
             return initialState;
         }
 
-        private void waitForLatch(final CountDownLatch latch) {
-            Log.v("automatonInitializer", "waiting for latch: " + latch);
-            while (latch.getCount() > 0) {
-                try {
-                    latch.await(500, TimeUnit.MILLISECONDS);
-                } catch (final InterruptedException ie) {
-                    // don't really care, just need to try again
-                }
-            }
-            Log.v("automatonInitializer", "stopped waiting for latch: " + latch);
-        }
+       
     }
 
 //    private final NetworkServiceConnection networkServiceConnection = new NetworkServiceConnection();

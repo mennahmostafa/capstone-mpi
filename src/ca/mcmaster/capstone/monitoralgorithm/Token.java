@@ -106,7 +106,7 @@ public class Token  implements java.io.Serializable{
 
     @Getter private final int uniqueLocalIdentifier; //4
     @Getter private final int owner; //4
-    @Getter private final int destination;
+    @Getter @Setter private  int destination;
     @Getter private final int targetEventId;
     @NonNull @Getter private final VectorClock cut;
     private final Set<AutomatonTransition> automatonTransitions = new HashSet<>();
