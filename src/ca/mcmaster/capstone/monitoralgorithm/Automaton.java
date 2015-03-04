@@ -21,7 +21,7 @@ import lombok.ToString;
 public class Automaton {
 
     public static final String LOG_TAG = "automaton";
-
+    public static Integer transitionsIds=0;
     public static enum Evaluation {SATISFIED, VIOLATED, UNDECIDED}
 
     public static final Automaton INSTANCE = new Automaton();
@@ -68,9 +68,10 @@ public class Automaton {
             final List<Conjunct> conjunctsWithExpresssions = new ArrayList<>();
             for (final ConjunctFromFile conjunct : conjunctsForTransition) {
             	 
-                conjunctsWithExpresssions.add(new Conjunct(virtualIdentifierMap.get("x" + conjunct.getOwnerProcess()), conjunct.getExpression()));
+                conjunctsWithExpresssions.add(new Conjunct(transitionsIds,virtualIdentifierMap.get("x" + conjunct.getOwnerProcess()), conjunct.getExpression()));
             }
-            INSTANCE.transitions.add(new AutomatonTransition(source, destination, conjunctsWithExpresssions));
+            INSTANCE.transitions.add(new AutomatonTransition(transitionsIds,source, destination, conjunctsWithExpresssions));
+            transitionsIds+=1;
         }
         Log.d(LOG_TAG, "states: " + INSTANCE.states.toString());
         Log.d(LOG_TAG, "transitions: " + INSTANCE.transitions.toString());

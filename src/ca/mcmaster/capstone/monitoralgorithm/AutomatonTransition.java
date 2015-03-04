@@ -27,14 +27,15 @@ public class AutomatonTransition implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	public static String LOG_TAG = "AutomatonTransition";
-
+	@NonNull @Getter private final Integer transitionId;
     @NonNull @Getter private final AutomatonState from;
     @NonNull @Getter private final AutomatonState to;
     private final List<Conjunct> conjuncts = new ArrayList<>();
 
-    public AutomatonTransition(@NonNull final AutomatonState from, @NonNull final AutomatonState to, @NonNull final List<Conjunct> conjuncts) {
+    public AutomatonTransition(@NonNull final Integer transitionId,@NonNull final AutomatonState from, @NonNull final AutomatonState to, @NonNull final List<Conjunct> conjuncts) {
         this.from = from;
         this.to = to;
+        this.transitionId=transitionId;
         this.conjuncts.addAll(conjuncts);
     }
 

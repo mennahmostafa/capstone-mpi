@@ -16,10 +16,12 @@ public class Conjunct implements Serializable {
     @NonNull @Getter private final Integer ownerProcess;
     @NonNull private final BooleanExpressionTree expression;
     @NonNull private final String expressionStr;
+	@NonNull @Getter private final Integer transitionId;
 
-    public Conjunct(@NonNull final Integer ownerProcess, @NonNull final String expression) {
+    public Conjunct(@NonNull final Integer transitionId,@NonNull final Integer ownerProcess, @NonNull final String expression) {
         this.ownerProcess = ownerProcess;
         this.expressionStr = expression;
+        this.transitionId=transitionId;
         this.expression = BooleanExpressionParser.INSTANCE.parse(expressionStr);
     }
 

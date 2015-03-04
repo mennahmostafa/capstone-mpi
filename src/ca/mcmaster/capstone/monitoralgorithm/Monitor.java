@@ -5,6 +5,7 @@ import mpi.*;
 //import android.os.IBinder;
 //import android.util.Log;
 import ca.mcmaster.capstone.logger.Log;
+import ca.mcmaster.capstone.monitoralgorithm.Conjunct.Evaluation;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -64,12 +65,13 @@ public class Monitor// extends Service
 
 		private static  void sendTokenOut(final Token token) {
 			Log.d(LOG_TAG, "Queued the following token to send out." + token.toString());
+			token.setTargetProcess(token.getDestination());
 			tokensToSendOut.add(token);
 		}
 
 		private static  void sendTokenHome(final Token token) {
 			Log.d(LOG_TAG, "Queued the following token to send home: " + token.toString());
-			token.setDestination(token.getOwner());
+			token.setTargetProcess(token.getOwner());
 			tokensToSendOut.add(token);
 		}
 
@@ -77,12 +79,12 @@ public class Monitor// extends Service
 			while(tokensToSendOut.size()!=0)
 			{
 				ArrayList<Token> tokensToSameDestination=new ArrayList<Token>();
-				int destination=tokensToSendOut.get(0).getDestination();
+				int destination=tokensToSendOut.get(0).getTargetProcess();
 				for (Iterator<Token> it = tokensToSendOut.iterator(); it.hasNext(); ) 
 				{
 
 					final Token token = it.next();
-					if (token.getDestination()==destination)
+					if (token.getTargetProcess()==destination)
 					{
 						tokensToSameDestination.add(token);
 						//it.remove();
@@ -479,20 +481,20 @@ public class Monitor// extends Service
 		{
 			final Integer destination = entry.getKey();
 			Log.d(LOG_TAG, "Need to send a token to: " + destination + "\n    to gather information about these transitions: " + entry.getValue());
-			Token.Builder builder = new Token.Builder(monitorID, destination);
-//			for (Iterator<Token> it = pendingSend.iterator(); it.hasNext(); )
-//			{
-//				final Token token = it.next();
-//				VectorClock.Comparison comparison = token.getCut().compareToClock(event.getVC());
-//				if (new Integer(token.getDestination()).equals(destination)
-//						&& comparison == VectorClock.Comparison.EQUAL
-//						&& token.getTargetEventId() == gv.getCut().process(destination) + 1) {
-//					//Modify one of the pending tokens
-//					builder = new Token.Builder(token);
-//					it.remove();
-//					break;
-//				}
-//			}
+			Token.Builder builder = new Token.Builder(monitorID, destination,destination);
+			//			for (Iterator<Token> it = pendingSend.iterator(); it.hasNext(); )
+			//			{
+			//				final Token token = it.next();
+			//				VectorClock.Comparison comparison = token.getCut().compareToClock(event.getVC());
+			//				if (new Integer(token.getDestination()).equals(destination)
+			//						&& comparison == VectorClock.Comparison.EQUAL
+			//						&& token.getTargetEventId() == gv.getCut().process(destination) + 1) {
+			//					//Modify one of the pending tokens
+			//					builder = new Token.Builder(token);
+			//					it.remove();
+			//					break;
+			//				}
+			//			}
 
 			// Get all the conjuncts for process j
 			final Set<Conjunct> conjuncts = new HashSet<>();
@@ -533,53 +535,62 @@ public class Monitor// extends Service
 			for (final GlobalView globalView : globalViews) {
 				globalView.updateWithToken(token);
 				boolean hasEnabled = false;
-				for (final AutomatonTransition trans : token.getAutomatonTransitions()) {
+				for (final AutomatonTransition trans : token.getAutomatonTransitions()) 
+				{
+
 					Log.d(LOG_TAG, "Checking if transition is enabled: " + trans.toString());
 					// Get other tokens for same transition
-					final List<Token> tokens = globalView.getTokensForTransition(trans);
-					boolean transitionCompleted=true;
-					for (Token tok : tokens) {
-						if (!tok.isReturned()) {
-							Log.d(LOG_TAG, "Not all tokens for this transition have been returned. Could not find: " + tok);
-							transitionCompleted=false;
-							break;
+					boolean conjunctsSatisfied=token.transitionConjunctsSatisfied(trans.getTransitionId());
+					if(conjunctsSatisfied)
+					{					
+						final List<Token> tokens = globalView.getTokensForTransition(trans);
+						boolean transitionCompleted=true;
+						for (Token tok : tokens) {
+							if (!tok.isReturned()) {
+								Log.d(LOG_TAG, "Not all tokens for this transition have been returned. Could not find: " + tok);
+								transitionCompleted=false;
+								break;
+							}
 						}
-					}
-					if(!transitionCompleted)
-					{
-						continue;
-					}
-					if (trans.enabled(globalView, tokens) && globalView.consistent(trans)) 
-					{
-						hasEnabled |= true;
-						Log.v(LOG_TAG, "The transition is enabled and the global view is consistent.");
-						globalView.reduceStateFromTokens(tokens);
-						globalView.removePendingTransition(trans);
-						final GlobalView gvn1 = new GlobalView(globalView);
-						final GlobalView gvn2 = new GlobalView(globalView);
-						gvn1.setCurrentState(trans.getTo());
-						gvn2.setCurrentState(trans.getTo());
-						gvn1.setTokens(new ArrayList<Token>());
-						gvn2.setTokens(new ArrayList<Token>());
-						synchronized (GV) {
-							GV.add(gvn1);
-							Log.d(LOG_TAG, "gvn1: " + gvn1.toString());
-							GV.add(gvn2);
-							Log.d(LOG_TAG, "gvn2: " + gvn1.toString());
+						if(!transitionCompleted)
+						{
+							continue;
 						}
-						handleMonitorStateChange(gvn1);
-						if(gvn1.getPendingEvents().size()!=0)
-							processEvent(gvn1, gvn1.getPendingEvents().remove());
-						synchronized (history) {
-							processEvent(gvn2, history.get(gvn2.getCut().process(monitorID)));
+
+						if (trans.enabled(globalView, tokens) && globalView.consistent(trans)) 
+						{
+							hasEnabled |= true;
+							Log.v(LOG_TAG, "The transition is enabled and the global view is consistent.");
+							globalView.reduceStateFromTokens(tokens);
+							globalView.removePendingTransition(trans);
+							final GlobalView gvn1 = new GlobalView(globalView);
+							final GlobalView gvn2 = new GlobalView(globalView);
+							gvn1.setCurrentState(trans.getTo());
+							gvn2.setCurrentState(trans.getTo());
+							gvn1.clearTokens();
+							gvn2.clearTokens();
+							synchronized (GV) {
+								GV.add(gvn1);
+								Log.d(LOG_TAG, "gvn1: " + gvn1.toString());
+								GV.add(gvn2);
+								Log.d(LOG_TAG, "gvn2: " + gvn1.toString());
+							}
+							handleMonitorStateChange(gvn1);
+							if(gvn1.getPendingEvents().size()!=0)
+								processEvent(gvn1, gvn1.getPendingEvents().remove());
+							synchronized (history) {
+								processEvent(gvn2, history.get(gvn2.getCut().process(monitorID)));
+							}
+							globalView.removeTokensForTransition(trans) ;
+						} 
+						else 
+						{
+							//Log.d("moonitor", "Removing a pending transition from the global view.");
+							//globalView.removePendingTransition(trans);
 						}
-					} 
-					else 
-					{
-						Log.d("moonitor", "Removing a pending transition from the global view.");
-						globalView.removePendingTransition(trans);
 					}
 				}
+				globalView.removeTokenForProcess(token.getDestination());
 				if (globalView.getPendingTransitions().isEmpty()) {
 					if (hasEnabled) {
 						synchronized (GV) {
@@ -587,7 +598,7 @@ public class Monitor// extends Service
 							GV.remove(globalView);
 						}
 					} else {
-						globalView.setTokens(new ArrayList<Token>());
+						globalView.clearTokens();
 						while (!globalView.getPendingEvents().isEmpty()) {
 							Log.d(LOG_TAG, "Processing pending event");
 							processEvent(globalView, globalView.getPendingEvents().remove());
@@ -618,7 +629,7 @@ public class Monitor// extends Service
 				}
 			}
 		}
-		
+
 		Log.d(LOG_TAG, "Exiting receiveToken.");
 	}
 	/*
@@ -639,7 +650,7 @@ public class Monitor// extends Service
 		for (ProcessState state : gv.getStates().values()) {
 			if (participatingProcesses.contains(state.getId())) {
 				boolean useTokenState = false;
-				for (Token token : gv.getTokens()) {
+				for (Map.Entry<Integer, Token> token : gv.getTokens().entrySet()) {
 					if (token.isReturned() && new Integer(token.getDestination()).equals(state.getId())) {
 						useTokenState = true;
 						statesToCheck.add(token.getTargetProcessState());

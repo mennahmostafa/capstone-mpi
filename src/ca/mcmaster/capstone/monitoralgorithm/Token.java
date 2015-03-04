@@ -5,6 +5,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+
+import ca.mcmaster.capstone.monitoralgorithm.Conjunct.Evaluation;
 //import ca.mcmaster.capstone.networking.structures.NetworkPeerIdentifier;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -24,7 +26,7 @@ public class Token  implements java.io.Serializable{
         private final int uniqueLocalIdentifier;
         private final int owner;
         private final int  destination;
-
+        private final int  targetProcess;
         private int targetEventId = 0;
         private VectorClock cut;
         private final Set<AutomatonTransition> automatonTransitions = new HashSet<>();
@@ -41,16 +43,18 @@ public class Token  implements java.io.Serializable{
             }
         }
 
-        public Builder(@NonNull final int owner, @NonNull final int destination) {
+        public Builder(@NonNull final int owner, @NonNull final int destination,@NonNull final int targetProcess) {
             this.uniqueLocalIdentifier = TokenIdCounter.getTokenId();
             this.owner = owner;
             this.destination = destination;
+            this.targetProcess=targetProcess;
         }
 
         public Builder(@NonNull final Token token) {
             this.uniqueLocalIdentifier = token.uniqueLocalIdentifier;
             this.owner = token.owner;
             this.destination = token.destination;
+            this.targetProcess=token.targetProcess;
             this.targetEventId = token.targetEventId;
             this.cut = new VectorClock(token.cut);
             this.automatonTransitions.addAll(token.automatonTransitions);
@@ -108,6 +112,7 @@ public class Token  implements java.io.Serializable{
     @Getter private final int owner; //4
     @Getter @Setter private  int destination;
     @Getter private final int targetEventId;
+    @Getter @Setter private int targetProcess;
     @NonNull @Getter private final VectorClock cut;
     private final Set<AutomatonTransition> automatonTransitions = new HashSet<>();
     private final Map<Conjunct, Conjunct.Evaluation> conjuncts = new HashMap<>();
@@ -119,6 +124,7 @@ public class Token  implements java.io.Serializable{
         this.uniqueLocalIdentifier = builder.uniqueLocalIdentifier;
         this.owner = builder.owner;
         this.destination = builder.destination;
+        this.targetProcess=builder.targetProcess;
         this.targetEventId = builder.targetEventId;
         this.cut = builder.cut;
         this.automatonTransitions.addAll(builder.automatonTransitions);
@@ -168,7 +174,25 @@ public class Token  implements java.io.Serializable{
     public boolean anyConjunctSatisfied() {
         return conjuncts.containsValue(Conjunct.Evaluation.TRUE);
     }
-
+    
+    public boolean transitionConjunctsSatisfied(Integer TransitionId){
+    	boolean conjunctsSatisfied=true;
+    	if(this.anyConjunctSatisfied())
+		{
+			for(Map.Entry<Conjunct,Conjunct.Evaluation> entry : this.getConjunctsMap().entrySet())
+			{
+				if(entry.getKey().getTransitionId()==TransitionId)
+				{
+					if(entry.getValue()==Evaluation.FALSE)
+					{
+						conjunctsSatisfied=false;
+						break;
+					}
+				}
+			}
+		}
+    	return conjunctsSatisfied;
+    }
     @Override
     public String toString() {
         return "Token{" +
