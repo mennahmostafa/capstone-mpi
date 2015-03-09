@@ -11,6 +11,9 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
+import lombok.Getter;
+import lombok.NonNull;
+import lombok.Setter;
 import ca.mcmaster.capstone.logger.Log;
 //import ca.mcmaster.capstone.networking.structures.NetworkPeerIdentifier;
 import lombok.NonNull;
@@ -29,7 +32,7 @@ public class GlobalView {
 	private final HashMap<Integer,Token> tokens = new HashMap<Integer,Token>();
 	private final Queue<Event> pendingEvents = new ArrayDeque<>();
 	private final Set<AutomatonTransition> pendingTransitions = new HashSet<>();
-
+	private @Getter @Setter boolean spawnedAtLeastAnotherGlobalView=false;
 	public GlobalView() {}
 
 	public GlobalView(@NonNull final GlobalView gv) {
@@ -80,8 +83,15 @@ public class GlobalView {
 		}
 	}
 	public void clearTokens() {
+		Log.d("GlobalView", "Clearing tokens");
+		if(!this.AllTokensReturned())
+		{
+			Log.v("GlobalView", "can't clear tokens, not all have returned: " +this.tokens);
+			return;
+		}
+		this.spawnedAtLeastAnotherGlobalView=false;
 		this.tokens.clear();
-		
+
 	}
 	public void addTokens(@NonNull final List<Token> tokens) {
 		for (Token token : tokens) {
@@ -113,16 +123,13 @@ public class GlobalView {
 	 * @param token The token to use to update the global view.
 	 */
 	public void updateWithToken(@NonNull final Token token) {
-		Token updatedToken = null;
-		for (Iterator<Token> it = this.tokens.values().iterator(); it.hasNext();) {
-			Token tokenInGV = it.next();
-			if (tokenInGV.getUniqueLocalIdentifier() == token.getUniqueLocalIdentifier()) {
-				updatedToken = new Token.Builder(tokenInGV).cut(token.getCut())
-						.returned(true).targetProcessState(token.getTargetProcessState()).build();
-				it.remove();
-				break;
-			}
-		}
+		Token tokenInGV = this.tokens.get(token.getDestination());
+
+		Token updatedToken = new Token.Builder(tokenInGV).cut(token.getCut())
+				.returned(true).targetProcessState(token.getTargetProcessState()).conjuncts(token.getConjunctsMap()).build();
+		this.tokens.remove(token.getDestination());
+
+
 		this.tokens.put(token.getDestination(), updatedToken);
 	}
 
@@ -164,15 +171,32 @@ public class GlobalView {
 		// final List<Conjunct> transConjuncts = transition.getConjuncts();
 		for (final Token token : this.tokens.values()) {
 
-			if (token.getAutomatonTransitions().contains(transition)) {
-				ret.add(token);
-				break;
+			for ( AutomatonTransition tran : token.getAutomatonTransitions())
+			{
+				if (tran.getTransitionId().equals(transition.getTransitionId()))
+				{
+					ret.add(token);
+				}
 			}
 
 		}
 		return ret;
 	}
 
+
+	public boolean AllTokensReturned() {
+
+		// final List<Conjunct> transConjuncts = transition.getConjuncts();
+		for (final Token token : this.tokens.values()) {
+
+			if (!token.isReturned()) {
+				return false;
+
+			}
+
+		}
+		return true;
+	}
 	/*
 	 * Removes all tokens in the global view that are associated with a particular transition.
 	 *
@@ -273,11 +297,15 @@ public class GlobalView {
 				if (newestTokenSeen == null || newestTokenSeen.getUniqueLocalIdentifier() < token.getUniqueLocalIdentifier()) {
 					newestTokenSeen = token;
 				}
-				if (token.isReturned() && new Integer(token.getDestination()).equals(state.getId())) {
+				if (newestTokenSeen.isReturned() && new Integer(newestTokenSeen.getDestination()).equals(state.getId())) {
 					useTokenState = true;
 				}
 			}
 			if (useTokenState) {
+				if(newestTokenSeen.getTargetProcessState()==null)
+				{
+					return false;
+				}
 				statesToCheck.add(newestTokenSeen.getTargetProcessState());
 			} else {
 				statesToCheck.add(state);
@@ -336,12 +364,12 @@ public class GlobalView {
 		final HashMap<Integer, Token> secondSet = new HashMap<>(second);
 		firstSet.putAll(secondSet);
 		return firstSet;
-		 
+
 	}
 
 	private static <T> Set<T> unionMerge(@NonNull final Collection<T> first, @NonNull final Collection<T> second) {
-        final Set<T> firstSet = new HashSet<>(first);
-        final Set<T> secondSet = new HashSet<>(second);
+		final Set<T> firstSet = new HashSet<>(first);
+		final Set<T> secondSet = new HashSet<>(second);
 		firstSet.addAll(secondSet);
 		return firstSet;
 	}

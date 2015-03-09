@@ -149,12 +149,12 @@ import ca.mcmaster.capstone.util.*;
     public  class AutomatonInitializer  {
     	static class Environment{
     		public static String getExternalStorageDirectory(){
-    			return "/home/m6mostaf/code-java/mpi-code/ADM-Java/src/";
+    			return "monitorInit/";
     		}
     	}
-        private   final File AUTOMATON_FILE = new File(Environment.getExternalStorageDirectory(), "monitorInit/automaton.json");
-        private   final File CONJUNCT_FILE = new File(Environment.getExternalStorageDirectory(), "monitorInit/conjunct_mapping.my");
-        private     final File INITIAL_STATE_FILE = new File(Environment.getExternalStorageDirectory(), "monitorInit/initial_state.json");
+        private   final File AUTOMATON_FILE = new File(Environment.getExternalStorageDirectory(), "/automaton.json");
+        private   final File CONJUNCT_FILE = new File(Environment.getExternalStorageDirectory(), "/conjunct_mapping.my");
+        private     final File INITIAL_STATE_FILE = new File(Environment.getExternalStorageDirectory(), "/initial_state.json");
         
         private AutomatonFile automaton = null;
         private final List<ConjunctFromFile> conjunctMap = new ArrayList<>();

@@ -21,111 +21,118 @@ import lombok.ToString;
 /* Class to represent an automaton transition.*/
 @EqualsAndHashCode @ToString
 public class AutomatonTransition implements Serializable {
-    /**
+	/**
 	 * 
 	 */
 	private static final long serialVersionUID = 1L;
 
 	public static String LOG_TAG = "AutomatonTransition";
 	@NonNull @Getter private final Integer transitionId;
-    @NonNull @Getter private final AutomatonState from;
-    @NonNull @Getter private final AutomatonState to;
-    private final List<Conjunct> conjuncts = new ArrayList<>();
+	@NonNull @Getter private final AutomatonState from;
+	@NonNull @Getter private final AutomatonState to;
+	private final List<Conjunct> conjuncts = new ArrayList<>();
 
-    public AutomatonTransition(@NonNull final Integer transitionId,@NonNull final AutomatonState from, @NonNull final AutomatonState to, @NonNull final List<Conjunct> conjuncts) {
-        this.from = from;
-        this.to = to;
-        this.transitionId=transitionId;
-        this.conjuncts.addAll(conjuncts);
-    }
+	public AutomatonTransition(@NonNull final Integer transitionId,@NonNull final AutomatonState from, @NonNull final AutomatonState to, @NonNull final List<Conjunct> conjuncts) {
+		this.from = from;
+		this.to = to;
+		this.transitionId=transitionId;
+		this.conjuncts.addAll(conjuncts);
+	}
 
-    public List<Conjunct> getConjuncts() {
-        return new ArrayList<>(conjuncts);
-    }
+	public List<Conjunct> getConjuncts() {
+		return new ArrayList<>(conjuncts);
+	}
 
-    /*
-     * Computes the evaluation of the transition based on the evaluation of each conjunct.
-     *
-     * @return The evaluation of the transition based on its conjuncts.
-     */
-    public Conjunct.Evaluation evaluate(@NonNull final Collection<ProcessState> processStates) throws EvaluationException {
-        final Map<Conjunct, Conjunct.Evaluation> evaluations = new HashMap<>();
-        
-        for (final ProcessState state : processStates) {
-            for (final Conjunct conjunct : this.conjuncts) {
-            	
-                if (conjunct.getOwnerProcess().equals(state.getId())) {
-                    evaluations.put(conjunct, conjunct.evaluate(state));
-                }
-            }
-        }
+	/*
+	 * Computes the evaluation of the transition based on the evaluation of each conjunct.
+	 *
+	 * @return The evaluation of the transition based on its conjuncts.
+	 */
+	public Conjunct.Evaluation evaluate(@NonNull final Collection<ProcessState> processStates) throws EvaluationException {
+		final Map<Conjunct, Conjunct.Evaluation> evaluations = new HashMap<>();
 
-        if (evaluations.isEmpty()) {
-            throw new EvaluationException("No conjuncts were evaluated with this Collection of states: " + processStates.toString());
-        }
+		for (final ProcessState state : processStates) {
+			for (final Conjunct conjunct : this.conjuncts) {
 
-        if (evaluations.values().contains(Conjunct.Evaluation.FALSE)) {
-            return Conjunct.Evaluation.FALSE;
-        } else if (evaluations.values().contains(Conjunct.Evaluation.NONE)) {
-            return Conjunct.Evaluation.NONE;
-        }
-        return Conjunct.Evaluation.TRUE;
-    }
+				if (conjunct.getOwnerProcess().equals(state.getId())) {
+					evaluations.put(conjunct, conjunct.evaluate(state));
+				}
+			}
+		}
 
-    /*
-     * Returns a set of process ids for the processes that contribute variables to the predicate
-     * labeling this transition.
-     *
-     * @return A set of process ids.
-     */
-    public Set<Integer> getParticipatingProcesses() {
-        final Set<Integer> ret = new HashSet<>();
-        for (final Conjunct conjunct : conjuncts) {
-            ret.add(conjunct.getOwnerProcess());
-        }
-        return ret;
-    }
+		if (evaluations.isEmpty()) {
+			throw new EvaluationException("No conjuncts were evaluated with this Collection of states: " + processStates.toString());
+		}
 
-    /*
-     * Returns a set of conjuncts that cause this transition to evaluate to false.
-     *
-     * @return A set of Conjuncts.
-     */
-    public Set<Conjunct> getForbiddingConjuncts(@NonNull final GlobalView gv) {
-        final Set<Conjunct> ret = new HashSet<>();
-        for (final Map.Entry<Integer, ProcessState> entry : gv.getStates().entrySet()) {
-            final ProcessState state = entry.getValue();
-            for (final Conjunct conjunct : conjuncts) {
-                if (conjunct.getOwnerProcess().equals(state.getId())
-                        && conjunct.evaluate(state) == Conjunct.Evaluation.FALSE) {
-                    ret.add(conjunct);
-                    break;
-                }
-            }
-        }
-        return ret;
-    }
+		if (evaluations.values().contains(Conjunct.Evaluation.FALSE)) {
+			return Conjunct.Evaluation.FALSE;
+		} else if (evaluations.values().contains(Conjunct.Evaluation.NONE)) {
+			return Conjunct.Evaluation.NONE;
+		}
+		return Conjunct.Evaluation.TRUE;
+	}
 
-    public boolean enabled(@NonNull GlobalView globalView, @NonNull final List<Token> tokens) {
-        Map<Integer, ProcessState> states = new HashMap<>(globalView.getStates());
-        for (Token token : tokens) {
-            final ProcessState targetProcessState = token.getTargetProcessState();
-            states.put(targetProcessState.getId(), targetProcessState);
-        }
+	/*
+	 * Returns a set of process ids for the processes that contribute variables to the predicate
+	 * labeling this transition.
+	 *
+	 * @return A set of process ids.
+	 */
+	public Set<Integer> getParticipatingProcesses() {
+		final Set<Integer> ret = new HashSet<>();
+		for (final Conjunct conjunct : conjuncts) {
+			ret.add(conjunct.getOwnerProcess());
+		}
+		return ret;
+	}
 
-        boolean evaluation = false;
-        try {
-            evaluation = this.evaluate(states.values()) == Conjunct.Evaluation.TRUE;
-        } catch (EvaluationException e) {
-            Log.d(LOG_TAG, e.getLocalizedMessage());
-        }
+	/*
+	 * Returns a set of conjuncts that cause this transition to evaluate to false.
+	 *
+	 * @return A set of Conjuncts.
+	 */
+	public Set<Conjunct> getForbiddingConjuncts(@NonNull final GlobalView gv) {
+		final Set<Conjunct> ret = new HashSet<>();
+		for (final Map.Entry<Integer, ProcessState> entry : gv.getStates().entrySet()) {
+			final ProcessState state = entry.getValue();
+			for (final Conjunct conjunct : conjuncts) {
+				if (conjunct.getOwnerProcess().equals(state.getId())
+						&& conjunct.evaluate(state) == Conjunct.Evaluation.FALSE) {
+					ret.add(conjunct);
+					break;
+				}
+			}
+		}
+		return ret;
+	}
 
-        return evaluation;
-    }
+	public boolean enabled(@NonNull GlobalView globalView, @NonNull final List<Token> tokens) {
+		Map<Integer, ProcessState> states = new HashMap<>(globalView.getStates());
+		for (Token token : tokens) {
+			if(token.getAutomatonTransitions().contains(this))
+			{
+				if(!token.isReturned())
+				{
+					return false;
+				}
+				final ProcessState targetProcessState = token.getTargetProcessState();
+				states.put(targetProcessState.getId(), targetProcessState);
+			}
+		}
 
-    public class EvaluationException extends Exception {
-        public EvaluationException(@NonNull final String message) {
-            super("Failed to evaluate: " + message);
-        }
-    }
+		boolean evaluation = false;
+		try {
+			evaluation = this.evaluate(states.values()) == Conjunct.Evaluation.TRUE;
+		} catch (EvaluationException e) {
+			Log.d(LOG_TAG, e.getLocalizedMessage());
+		}
+
+		return evaluation;
+	}
+
+	public class EvaluationException extends Exception {
+		public EvaluationException(@NonNull final String message) {
+			super("Failed to evaluate: " + message);
+		}
+	}
 }

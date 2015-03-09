@@ -6,19 +6,19 @@
 			<attribute name="maven.pomderived" value="true"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="lib" path="/usr/local/lib/mpi.jar"/>
 	<classpathentry kind="con" path="org.eclipse.m2e.MAVEN2_CLASSPATH_CONTAINER">
 		<attributes>
 			<attribute name="maven.pomderived" value="true"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="lib" path="/home/m6mostaf/code-java/mpi-code/ADM-Java/libs/lombok.jar"/>
-	<classpathentry kind="lib" path="/home/m6mostaf/code-java/mpi-code/ADM-Java/libs/gson-2.3.1.jar"/>
-	<classpathentry kind="lib" path="/home/m6mostaf/code-java/mpi-code/ADM-Java/libs/commons-io-2.4.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER">
 		<attributes>
 			<attribute name="maven.pomderived" value="true"/>
 		</attributes>
 	</classpathentry>
+	<classpathentry kind="lib" path="/Users/mennamostafa/Masters/code-java/capstone-mpi/libs/commons-io-2.4.jar"/>
+	<classpathentry kind="lib" path="/Users/mennamostafa/Masters/code-java/capstone-mpi/libs/gson-2.3.1.jar"/>
+	<classpathentry kind="lib" path="/Users/mennamostafa/Masters/code-java/capstone-mpi/libs/lombok.jar"/>
+	<classpathentry kind="lib" path="/usr/local/lib/mpi.jar"/>
 	<classpathentry kind="output" path="target/classes"/>
 </classpath>

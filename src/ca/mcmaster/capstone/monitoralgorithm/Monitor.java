@@ -44,6 +44,8 @@ public class Monitor// extends Service
 	private Integer rank= null;
 	private static Integer size = null;
 	private final Set<GlobalView> GV = new HashSet<>();
+	private HashMap<Integer,Boolean> finalizedMonitors=new HashMap<>();
+	private boolean programTerminated=false;
 	//	private ExecutorService workQueue;
 	//	private Future<?> monitorJob = null;
 	//	private Future<?> tokenPollJob = null;
@@ -87,7 +89,7 @@ public class Monitor// extends Service
 					if (token.getTargetProcess()==destination)
 					{
 						tokensToSameDestination.add(token);
-						//it.remove();
+						//	it.remove();
 					}
 				}
 				for(Token t :tokensToSameDestination)
@@ -105,7 +107,7 @@ public class Monitor// extends Service
 		this.monitorID=this.rank+1;
 		size=processes_count;
 		System.out.print("I am monitor M"+this.rank+"\n");
-		Log.fileName="M"+rank+"_";
+		Log.fileName="M"+monitorID+"_";
 	}
 
 
@@ -176,6 +178,7 @@ public class Monitor// extends Service
 			boolean lastEvent=pollTerminatingProgram();
 			if(lastEvent)
 			{
+
 				Log.v(LOG_TAG,"Terminating, last event");
 				finalizeMonitor();
 				break;
@@ -183,10 +186,62 @@ public class Monitor// extends Service
 			//Thread.sleep(10);
 		}
 	}
-	private void finalizeMonitor()
+	private void finalizeMonitor() throws ClassNotFoundException, MPIException, IOException, InterruptedException
 	{
+		programTerminated=true;
 		//TODO: cleanup.
+		returnAllWaitingTokens();
+		TokenSender.bulkSendTokens();
+		 
+		while( true)//pendingTokensAtOtherMonitors() || pendingEventsAtAnyGV())
+		{
+			
+			pollTokens();
+			for(GlobalView gv : this.GV)
+			{
 
+				if(gv.getTokens().size()==0 && gv.getPendingEvents().size()!=0)
+				{
+					processEvent(gv, gv.getPendingEvents().remove());
+				}
+			}
+			TokenSender.bulkSendTokens();
+			Thread.sleep(100);
+			 
+		}
+		//finalizedMonitors.put(monitorID, true);
+		 
+		//Log.v(LOG_TAG, "Exiting FinalizeMonitor");
+	}
+	private void returnAllWaitingTokens(){
+		synchronized (waitingTokens) {
+			final Set<Token> tokensToProcess = Collections.unmodifiableSet(new HashSet<>(waitingTokens));
+			waitingTokens.clear();
+			for (final Token token : tokensToProcess) {
+
+				setTokenToFalse(token);
+			}
+		}
+	}
+	private boolean pendingTokensAtOtherMonitors(){
+		for(GlobalView gv : this.GV)
+		{
+			if(!gv.AllTokensReturned())
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+	private boolean pendingEventsAtAnyGV(){
+		for(GlobalView gv : this.GV)
+		{
+			if(gv.getPendingEvents().size()!=0)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 	private boolean pollTerminatingProgram() throws MPIException, ClassNotFoundException, IOException {
 		Status status=MPI.COMM_WORLD.iProbe(MPI.ANY_SOURCE, MessageTags.ProgramTerminating.ordinal());
@@ -360,7 +415,7 @@ public class Monitor// extends Service
 		for(int i = 0; i < tokenBytes.length; i++){
 			out.put(i, tokenBytes[i]);
 		}
-
+		Log.v("Monitor", "sending the following token array to M"+pid+":\n"+tokens);
 		Request request=MPI.COMM_WORLD.iSend(MPI.slice(out,0), tokenBytes.length, MPI.BYTE, getProcessMonitorID(pid.intValue()), MessageTags.Token.ordinal());
 		request.waitFor();
 
@@ -529,90 +584,112 @@ public class Monitor// extends Service
 	 * @param token The token being received.
 	 */
 	public void receiveToken(@NonNull final Token token) throws MPIException, ClassNotFoundException, IOException {
-		Log.d(LOG_TAG, "Entering receiveToken. Token from: " + token.getOwner());
+		Log.d(LOG_TAG, "Entering receiveToken\n token:"+token);
 		if (new Integer(token.getOwner()).equals(monitorID)) {
-			final List<GlobalView> globalViews = getGlobalView(token);
-			for (final GlobalView globalView : globalViews) {
-				globalView.updateWithToken(token);
-				boolean hasEnabled = false;
-				for (final AutomatonTransition trans : token.getAutomatonTransitions()) 
-				{
+			Log.d(LOG_TAG, "My token.");
+			final GlobalView globalView = getGlobalView(token);
+			if(globalView==null)
+			{
+				Log.v(LOG_TAG, "Can't find globalView!!!!!!");
+				return;
+			}
+			globalView.updateWithToken(token);
 
-					Log.d(LOG_TAG, "Checking if transition is enabled: " + trans.toString());
-					// Get other tokens for same transition
-					boolean conjunctsSatisfied=token.transitionConjunctsSatisfied(trans.getTransitionId());
-					if(conjunctsSatisfied)
-					{					
-						final List<Token> tokens = globalView.getTokensForTransition(trans);
-						boolean transitionCompleted=true;
-						for (Token tok : tokens) {
-							if (!tok.isReturned()) {
-								Log.d(LOG_TAG, "Not all tokens for this transition have been returned. Could not find: " + tok);
-								transitionCompleted=false;
-								break;
-							}
-						}
-						if(!transitionCompleted)
-						{
-							continue;
-						}
+			Log.d(LOG_TAG, "updating Global view with token: "+globalView);
+			for (final AutomatonTransition trans : token.getAutomatonTransitions()) 
+			{
 
-						if (trans.enabled(globalView, tokens) && globalView.consistent(trans)) 
-						{
-							hasEnabled |= true;
-							Log.v(LOG_TAG, "The transition is enabled and the global view is consistent.");
-							globalView.reduceStateFromTokens(tokens);
-							globalView.removePendingTransition(trans);
-							final GlobalView gvn1 = new GlobalView(globalView);
-							final GlobalView gvn2 = new GlobalView(globalView);
-							gvn1.setCurrentState(trans.getTo());
-							gvn2.setCurrentState(trans.getTo());
-							gvn1.clearTokens();
-							gvn2.clearTokens();
-							synchronized (GV) {
-								GV.add(gvn1);
-								Log.d(LOG_TAG, "gvn1: " + gvn1.toString());
-								GV.add(gvn2);
-								Log.d(LOG_TAG, "gvn2: " + gvn1.toString());
-							}
-							handleMonitorStateChange(gvn1);
-							if(gvn1.getPendingEvents().size()!=0)
-								processEvent(gvn1, gvn1.getPendingEvents().remove());
-							synchronized (history) {
-								processEvent(gvn2, history.get(gvn2.getCut().process(monitorID)));
-							}
-							globalView.removeTokensForTransition(trans) ;
-						} 
-						else 
-						{
-							//Log.d("moonitor", "Removing a pending transition from the global view.");
-							//globalView.removePendingTransition(trans);
+				Log.d(LOG_TAG, "Checking if transition is enabled: " + trans.toString());
+				// Get other tokens for same transition
+				boolean conjunctsSatisfied=token.transitionConjunctsSatisfied(trans.getTransitionId());
+				if(conjunctsSatisfied)
+				{					
+					final List<Token> tokens = globalView.getTokensForTransition(trans);
+					boolean transitionCompleted=true;
+					for (Token tok : tokens) {
+						if (!tok.isReturned()) {
+							Log.d(LOG_TAG, "Not all tokens for this transition have been returned. Could not find: " + tok);
+							transitionCompleted=false;
+							break;
 						}
 					}
-				}
-				globalView.removeTokenForProcess(token.getDestination());
-				if (globalView.getPendingTransitions().isEmpty()) {
-					if (hasEnabled) {
+					if (!transitionCompleted)
+					{
+						continue;
+					}
+					boolean transitionEnabled=trans.enabled(globalView, tokens);
+					Log.v(LOG_TAG, "Transition enabled: "+ transitionEnabled);
+
+					boolean transitionConsistent=transitionEnabled?globalView.consistent(trans):false;
+					Log.v(LOG_TAG, "Transition consistent: "+ transitionConsistent);
+					if (transitionCompleted && transitionEnabled && transitionConsistent) 
+					{ 
+						Log.v(LOG_TAG, "The transition is enabled and the global view is consistent.");
+						globalView.reduceStateFromTokens(tokens);
+						globalView.removePendingTransition(trans);
+						final GlobalView gvn1 = new GlobalView(globalView);
+						final GlobalView gvn2 = new GlobalView(globalView);
+						gvn1.setCurrentState(trans.getTo());
+						gvn2.setCurrentState(trans.getTo());
+						gvn1.clearTokens();
+						gvn2.clearTokens();
 						synchronized (GV) {
-							Log.d(LOG_TAG, "Removing a global view.");
-							GV.remove(globalView);
+							GV.add(gvn1);
+							Log.d(LOG_TAG, "gvn1: " + gvn1.toString());
+							GV.add(gvn2);
+							Log.d(LOG_TAG, "gvn2: " + gvn1.toString());
 						}
-					} else {
-						globalView.clearTokens();
-						while (!globalView.getPendingEvents().isEmpty()) {
-							Log.d(LOG_TAG, "Processing pending event");
-							processEvent(globalView, globalView.getPendingEvents().remove());
+						handleMonitorStateChange(gvn1);
+						if(gvn1.getPendingEvents().size()!=0)
+							processEvent(gvn1, gvn1.getPendingEvents().remove());
+						synchronized (history) {
+							processEvent(gvn2, history.get(gvn2.getCut().process(monitorID)));
 						}
-					}
-				} else {
-					final Token maxConjuncts = globalView.getTokenWithMostConjuncts();
-					if (maxConjuncts != null) {
-						TokenSender.sendTokenOut(maxConjuncts);
-					}
+						globalView.setSpawnedAtLeastAnotherGlobalView(true);
+					} 
+
 				}
 			}
+
+			Log.d(LOG_TAG, "Checking if all tokens returned");
+			if(globalView.AllTokensReturned() && globalView.isSpawnedAtLeastAnotherGlobalView())
+			{
+
+				Log.d(LOG_TAG, "all tokens returned and at least one global view was spawned");
+				globalView.clearTokens();
+				synchronized (GV) {
+					Log.d(LOG_TAG, "Removing a global view.");
+					GV.remove(globalView);
+				}
+			}
+			if(globalView.AllTokensReturned() && !globalView.isSpawnedAtLeastAnotherGlobalView())
+			{
+				Log.d(LOG_TAG, "all tokens returned but no global view was spawned");
+				globalView.clearTokens();
+				if (!globalView.getPendingEvents().isEmpty()) 
+				{
+					Log.d(LOG_TAG, "Processing pending event");
+					processEvent(globalView, globalView.getPendingEvents().remove());
+				}
+			}
+			else
+			{
+
+				Log.d(LOG_TAG, "still waiting for tokens to return");
+			}
+			//				else 
+			//				{
+			//					final Token maxConjuncts = globalView.getTokenWithMostConjuncts();
+			//					if (maxConjuncts != null) 
+			//					{
+			//						TokenSender.sendTokenOut(maxConjuncts);
+			//					}
+			//				}
+
 		} else {
+			Log.d(LOG_TAG, "Not my token.");
 			boolean hasTarget = false;
+			token.setOriginalTargetEventId(token.getTargetEventId());
 			synchronized (history) {
 				for (final Event event : history.values()) {
 					if (event.getEid() == token.getTargetEventId()) {
@@ -651,9 +728,9 @@ public class Monitor// extends Service
 			if (participatingProcesses.contains(state.getId())) {
 				boolean useTokenState = false;
 				for (Map.Entry<Integer, Token> token : gv.getTokens().entrySet()) {
-					if (token.isReturned() && new Integer(token.getDestination()).equals(state.getId())) {
+					if (token.getValue().isReturned() && new Integer(token.getValue().getDestination()).equals(state.getId())) {
 						useTokenState = true;
-						statesToCheck.add(token.getTargetProcessState());
+						statesToCheck.add(token.getValue().getTargetProcessState());
 					}
 				}
 				if (!useTokenState) {
@@ -693,16 +770,10 @@ public class Monitor// extends Service
 				Log.d(LOG_TAG, "Waiting for next event.");
 				waitingTokens.add(token.waitForNextEvent());
 			}
-		} else {
-			final Map<Conjunct, Conjunct.Evaluation> conjunctsMap = token.getConjunctsMap();
-			for (final Conjunct conjunct : conjunctsMap.keySet()) {
-				conjunctsMap.put(conjunct, Conjunct.Evaluation.FALSE);
-			}
-			synchronized (history) {
-				final Event targetEvent = history.get(token.getTargetEventId());
-				final Token newToken = new Token.Builder(token).cut(targetEvent.getVC()).conjuncts(conjunctsMap).targetProcessState(targetEvent.getState()).build();
-				TokenSender.sendTokenHome(newToken);
-			}
+		} 
+		else 
+		{
+			setTokenToFalse(token);
 		}
 		Log.d(LOG_TAG, "Exiting processToken");
 	}
@@ -725,7 +796,12 @@ public class Monitor// extends Service
 				if (history.containsKey(nextEvent)) {
 					Log.d(LOG_TAG, "Processing token with next event.");
 					processToken(token.waitForNextEvent(), history.get(nextEvent));
-				} else {
+				}
+				else if(programTerminated)
+				{
+					setTokenToFalse(token);
+				}
+				else {
 					Log.d(LOG_TAG, "Adding a token to waitingTokens.");
 					synchronized (waitingTokens) {
 						waitingTokens.add(token.waitForNextEvent());
@@ -736,24 +812,36 @@ public class Monitor// extends Service
 		Log.d(LOG_TAG, "Exiting evaluateToken");
 	}
 
+	private void setTokenToFalse(@NonNull final Token token)
+	{
+		final Map<Conjunct, Conjunct.Evaluation> conjunctsMap = token.getConjunctsMap();
+		for (final Conjunct conjunct : conjunctsMap.keySet()) {
+			conjunctsMap.put(conjunct, Conjunct.Evaluation.FALSE);
+		}
+		synchronized (history) {
+			final Event targetEvent = history.get(token.getOriginalTargetEventId());
+			final Token newToken = new Token.Builder(token).cut(targetEvent.getVC()).conjuncts(conjunctsMap).targetProcessState(targetEvent.getState()).build();
+			TokenSender.sendTokenHome(newToken);
+		}
+	}
 	/*
 	 * Returns a list of global views that contain a copy of token.
 	 *
 	 * @param token The token to search for.
 	 * @return A list of GlobalViews that have a copy of token.
 	 */
-	private List<GlobalView> getGlobalView(@NonNull final Token token) {
-		final List<GlobalView> ret = new ArrayList<>();
+	private GlobalView getGlobalView(@NonNull final Token token) {
+
 		synchronized (GV) {
 			for (final GlobalView gv : GV) {
-				for (final Token t : gv.getTokens()) {
-					if (token.getUniqueLocalIdentifier() == t.getUniqueLocalIdentifier()) {
-						ret.add(gv);
-						break;
+				for (final Map.Entry<Integer, Token> t : gv.getTokens().entrySet()) {
+					if (t.getValue().getUniqueLocalIdentifier()==token.getUniqueLocalIdentifier()) {
+						return gv;
+
 					}
 				}
 			}
 		}
-		return ret;
+		return null;
 	}
 }

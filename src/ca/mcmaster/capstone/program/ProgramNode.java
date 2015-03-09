@@ -20,7 +20,7 @@ public class ProgramNode {
 	Double x=new Double(0);
 	final int  maxMessageSize=1024*5;
 	long startTime;
-	int simulationTimeInSeconds=120*1000; //2 mins
+	int simulationTimeInSeconds=60*1000; //2 mins
 	public ProgramNode(int rank,int size) throws IOException, MPIException {
 		this.rank=rank;
 		this.size=size; 
@@ -39,7 +39,7 @@ public class ProgramNode {
 	}
 	public void start() throws IOException, MPIException, ClassNotFoundException, InterruptedException{
 		
-		Log.v("program","I am process P"+this.rank+"\n");
+		Log.v("program","I am process P"+this.processID+"\n");
 		startTime=System.currentTimeMillis();
 		long endTime=startTime+simulationTimeInSeconds;
 		long nextHeartBeat=System.currentTimeMillis()+heartbeatIntervalInSeconds;
@@ -63,6 +63,7 @@ public class ProgramNode {
 			}
 			receiveHeartbeat();
 			boolean finalStateFound=receiveMonitorFinalState();
+			Thread.sleep(5000);
 			if(System.currentTimeMillis()>=endTime || finalStateFound)
 			{
 				Log.v("program", "Terminating program");
@@ -71,7 +72,6 @@ public class ProgramNode {
 				break;
 			}
 			
-			Thread.sleep(5000);
 		}
 	}
 	private void receiveHeartbeat() throws MPIException, ClassNotFoundException, IOException{
@@ -148,7 +148,7 @@ public class ProgramNode {
 		if(rank ==2 || rank==3) //p3.x=1 and p4.x=1
 		{
 				long currentTime= System.currentTimeMillis();
-			if(currentTime-startTime>60*1000)
+			if(currentTime-startTime>30*1000)
 			{
 
 				Log.v("program", "generating Event");

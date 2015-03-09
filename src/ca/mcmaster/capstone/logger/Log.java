@@ -15,7 +15,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.concurrent.BlockingQueue;
 import java.text.SimpleDateFormat;
-public  class Log { 
+public  class Log {
 	public class Logstream implements Runnable {
 
 		private boolean firstFileOpen=true;

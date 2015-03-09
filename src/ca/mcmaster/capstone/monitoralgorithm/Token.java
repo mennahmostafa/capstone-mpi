@@ -28,6 +28,7 @@ public class Token  implements java.io.Serializable{
         private final int  destination;
         private final int  targetProcess;
         private int targetEventId = 0;
+        private int OriginalTargetEventId = 0;
         private VectorClock cut;
         private final Set<AutomatonTransition> automatonTransitions = new HashSet<>();
         private final Map<Conjunct, Conjunct.Evaluation> conjuncts = new HashMap<>();
@@ -56,6 +57,7 @@ public class Token  implements java.io.Serializable{
             this.destination = token.destination;
             this.targetProcess=token.targetProcess;
             this.targetEventId = token.targetEventId;
+            this.OriginalTargetEventId = token.OriginalTargetEventId;
             this.cut = new VectorClock(token.cut);
             this.automatonTransitions.addAll(token.automatonTransitions);
             this.conjuncts.putAll(token.conjuncts);
@@ -112,6 +114,7 @@ public class Token  implements java.io.Serializable{
     @Getter private final int owner; //4
     @Getter @Setter private  int destination;
     @Getter private final int targetEventId;
+    @Getter @Setter private int OriginalTargetEventId;
     @Getter @Setter private int targetProcess;
     @NonNull @Getter private final VectorClock cut;
     private final Set<AutomatonTransition> automatonTransitions = new HashSet<>();
@@ -126,6 +129,7 @@ public class Token  implements java.io.Serializable{
         this.destination = builder.destination;
         this.targetProcess=builder.targetProcess;
         this.targetEventId = builder.targetEventId;
+        this.OriginalTargetEventId=builder.OriginalTargetEventId;
         this.cut = builder.cut;
         this.automatonTransitions.addAll(builder.automatonTransitions);
         this.conjuncts.putAll(builder.conjuncts);
